@@ -70,4 +70,7 @@ if [ ! -f "/tmp/.container/container-restart" ] ; then
     fi
 fi
 
+custom_files /assets/custom /
+custom_scripts
+
 liftoff
