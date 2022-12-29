@@ -77,7 +77,11 @@ The following directories are used for configuration and can be mapped for persi
 
 | Directory | Description |
 | --------- | ----------- |
-
+| `/config` | Configuration |
+| `/data/`  | Data |
+| `/data/db` | SQLite DB |
+| `/data/registrations` | Registrations |
+| `/logs` | Logs |
 
 * * *
 ### Environment Variables
@@ -94,22 +98,22 @@ Be sure to view the following repositories to understand all the customizable op
 
 #### Container Options
 
-| Variable                          | Description | Default                      |
-| --------------------------------- | ----------- | ---------------------------- |
-| `CONFIG_PATH`                     |             | `/config/`                   |
-| `DATA_PATH`                       |             | `/data/`                     |
-| `DB_SQLITE_PATH`                  |             | `${DATA_PATH}/db/`           |
-| `HOMESERVER_ADDRESS`              |             | `https://example.com`        |
-| `HOMESERVER_DOMAIN`               |             | `example.com`                |
-| `HOMESERVER_ENABLE_ASYNC_UPLOADS` |             | `false`                      |
-| `HOMESERVER_HTTP_RETRY_COUNT`     |             | `4`                          |
-| `HOMESERVER_SOFTWARE`             |             | `standard`                   |
-| `HOMESERVER_TLS_VERIFY`           |             | `TRUE`                       |
-| `LOG_LEVEL`                       |             | `INFO`                       |
-| `LOG_PATH`                        |             | `/logs/`                     |
-| `LOG_TYPE`                        |             | `FILE`                       |
-| `MODE`                            | `ALL`,`FACEBOOK` | |
-| `REGISTRATION_PATH`               |             | `${DATA_PATH}/registrations` |
+| Variable                          | Description      | Default                      |
+| --------------------------------- | ---------------- | ---------------------------- |
+| `CONFIG_PATH`                     |                  | `/config/`                   |
+| `DATA_PATH`                       |                  | `/data/`                     |
+| `DB_SQLITE_PATH`                  |                  | `${DATA_PATH}/db/`           |
+| `HOMESERVER_ADDRESS`              |                  | `https://example.com`        |
+| `HOMESERVER_DOMAIN`               |                  | `example.com`                |
+| `HOMESERVER_ENABLE_ASYNC_UPLOADS` |                  | `false`                      |
+| `HOMESERVER_HTTP_RETRY_COUNT`     |                  | `4`                          |
+| `HOMESERVER_SOFTWARE`             |                  | `standard`                   |
+| `HOMESERVER_TLS_VERIFY`           |                  | `TRUE`                       |
+| `LOG_LEVEL`                       |                  | `INFO`                       |
+| `LOG_PATH`                        |                  | `/logs/`                     |
+| `LOG_TYPE`                        |                  | `FILE`                       |
+| `MODE`                            | `ALL`,`FACEBOOK` |                              |
+| `REGISTRATION_PATH`               |                  | `${DATA_PATH}/registrations` |
 
 #### Facebook
 
