@@ -4,6 +4,10 @@ services:
   matrix-bridges-app:
     image: tiredofit/matrix-bridges:latest
     container_name: matrix-bridges-app
+    labels:
+      - traefik.enable=false
+      - traefik.http.routers.matrix-bridges-app.rule=Host(`bridge.example.com`)
+      - traefik.http.services.matrix-bridges-app.loadbalancer.server.port=29319
     volumes:
       - ./config:/config
       - ./data:/data
@@ -14,9 +18,70 @@ services:
       - SETUP_TYPE=AUTO
 
       - MODE=facebook
+
+      - HOMESERVER_ADDRESS=https://matrix.example.com
+      - HOMESERVER_DOMAIN=example.com
+      - FACEBOOK_APPSERVER_ADDRESS=http://matrix-bridges-app:29319
+
+      - FACEBOOK_DB_TYPE=postgresql
+      - FACEBOOK_DB_HOST=matrix-bridges-db
+      - FACEBOOK_DB_NAME=facebook
+      - FACEBOOK_DB_USER=facebook
+      - FACEBOOK_DB_PASS=password
+
+      - FACEBOOK_ENABLE_PUBLIC=TRUE
+      - FACEBOOK_PUBLIC_EXTERNAL_URL=https://bridge.example.com/public
+      - FACEBOOK_BACKFILL_UNREAD_HOURS_THRESHOLD=1
+      - FACEBOOK_BACKFILL_MAX_CONVERSATIONS=5
+      - FACEBOOK_ENCRYPTION_ALLOW=TRUE
+      - FACEBOOK_PERIODIC_RECONNECT_INTERVAL=600,3600
+
+      - FACEBOOK_PERMISSIONS_RELAY=*
+      - FACEBOOK_PERMISSIONS_ADMIN=@admin:example.com
+      - FACEBOOK_PERMISSIONS_USER=example.com
+      - FACEBOOK_LOG_TYPE=FILE
+
+  matrix-bridges-db:
+    image: tiredofit/postgres:15
+    container_name: matrix-bridges-db
+    volumes:
+      - ./db/facebook:/var/lib/postgresql
+    environment:
+      - TIMEZONE=America/Vancouver
+      - CONTAINER_NAME=bridge-db
+      - CONTAINER_ENABLE_MONITORING=FALSE
+      - ZABBIX_AGENT_TYPE=classic
+
+      - POSTGRES_DB=facebook
+      - POSTGRES_USER=facebook
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
     networks:
       - services
     restart: always
+
+  matrix-bridges-db-backup:
+    image: tiredofit/db-backup
+    container_name: matrix-bridges-db-backup
+    volumes:
+      - ./dbbackup:/backup
+    environment:
+      - TIMEZONE=America/Vancouver
+      - CONTAINER_ENABLE_MONITORING=FALSE
+      - CONTAINER_NAME=matrix-bridges-db-backup
+
+      - DB_HOST=matrix-bridges-db
+      - DB_TYPE=postgres
+      - DB_NAME=facebook
+      - DB_USER=facebook
+      - DB_PASS=password
+      - DB_DUMP_FREQ=1440
+      - DB_DUMP_BEGIN=0000
+      - DB_CLEANUP_TIME=8640
+    networks:
+      - services
+    restart: always
+
 
 networks:
   proxy:
