@@ -314,6 +314,18 @@ RUN source assets/functions/00-container && \
     mkdir -p /assets/config/slack && \
     cp -R example-config.yaml /assets/config/slack/example.config.yaml && \
     \
+    clone_git_repo "${TELEGRAM_REPO_URL}" "${TELEGRAM_VERSION}" && \
+    pip3 install \
+                --upgrade \
+                --no-cache-dir \
+                -r requirements.txt \
+                -r optional-requirements.txt \
+                .[all] \
+                && \
+    \
+    mkdir -p /assets/config/telegram && \
+    cp -R mautrix_telegram/example-config.yaml /assets/config/telegram/example.config.yaml && \
+    \
     clone_git_repo "${WHATSAPP_REPO_URL}" "${WHATSAPP_VERSION}" && \
     go build -o /usr/bin/mautrix-whatsapp && \
     mkdir -p /assets/config/whatsapp && \

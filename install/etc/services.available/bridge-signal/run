@@ -11,6 +11,6 @@ check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Signal bridge version ${SIGNAL_VERSION}"
-silent s6-setuidgid matrix exec python3 \
+sudo -u matrix exec python3 \
                                     -m mautrix_signal \
                                     -c "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"

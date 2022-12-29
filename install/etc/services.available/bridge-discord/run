@@ -11,4 +11,4 @@ check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Discord bridge version ${DISCORD_VERSION}"
-silent s6-setuidgid matrix /usr/bin/mautrix-discord
+sudo -u matrix /usr/bin/mautrix-discord

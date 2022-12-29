@@ -11,6 +11,6 @@ check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Twitter bridge version ${TWITTER_VERSION}"
-silent s6-setuidgid matrix exec python3 \
+sudo -u matrix exec python3 \
                                     -m mautrix_twitter \
                                     -c "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"

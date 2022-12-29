@@ -11,4 +11,4 @@ check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Slack bridge version ${SLACK_VERSION}"
-silent s6-setuidgid matrix exec exec /usr/bin/mautrix-slack
+sudo -u matrix exec /usr/bin/mautrix-slack

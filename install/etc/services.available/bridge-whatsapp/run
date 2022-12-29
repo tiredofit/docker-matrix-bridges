@@ -11,4 +11,4 @@ check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Whatsapp bridge version ${WHATSAPP_VERSION}"
-silent s6-setuidgid matrix exec exec /usr/bin/mautrix-whatsapp
+sudo -u matrix exec /usr/bin/mautrix-whatsapp

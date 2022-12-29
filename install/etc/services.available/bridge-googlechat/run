@@ -11,6 +11,6 @@ check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Google Chat bridge version ${GOOGLECHAT_VERSION}"
-silent s6-setuidgid matrix exec python3 \
+sudo -u matrix exec python3 \
                                     -m mautrix_googlechat \
                                     -c "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
