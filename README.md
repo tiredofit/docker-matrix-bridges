@@ -75,13 +75,13 @@ Images are built primarily for `amd64` architecture, and may also include builds
 
 The following directories are used for configuration and can be mapped for persistent storage.
 
-| Directory | Description |
-| --------- | ----------- |
-| `/config` | Configuration |
-| `/data/`  | Data |
-| `/data/db` | SQLite DB |
+| Directory             | Description   |
+| --------------------- | ------------- |
+| `/config`             | Configuration |
+| `/data/`              | Data          |
+| `/data/db`            | SQLite DB     |
 | `/data/registrations` | Registrations |
-| `/logs` | Logs |
+| `/logs`               | Logs          |
 
 * * *
 ### Environment Variables
@@ -98,22 +98,22 @@ Be sure to view the following repositories to understand all the customizable op
 
 #### Container Options
 
-| Variable                          | Description      | Default                      |
-| --------------------------------- | ---------------- | ---------------------------- |
-| `CONFIG_PATH`                     |                  | `/config/`                   |
-| `DATA_PATH`                       |                  | `/data/`                     |
-| `DB_SQLITE_PATH`                  |                  | `${DATA_PATH}/db/`           |
-| `HOMESERVER_ADDRESS`              |                  | `https://example.com`        |
-| `HOMESERVER_DOMAIN`               |                  | `example.com`                |
-| `HOMESERVER_ENABLE_ASYNC_UPLOADS` |                  | `false`                      |
-| `HOMESERVER_HTTP_RETRY_COUNT`     |                  | `4`                          |
-| `HOMESERVER_SOFTWARE`             |                  | `standard`                   |
-| `HOMESERVER_TLS_VERIFY`           |                  | `TRUE`                       |
-| `LOG_LEVEL`                       |                  | `INFO`                       |
-| `LOG_PATH`                        |                  | `/logs/`                     |
-| `LOG_TYPE`                        |                  | `FILE`                       |
-| `MODE`                            | `ALL`,`FACEBOOK` |                              |
-| `REGISTRATION_PATH`               |                  | `${DATA_PATH}/registrations` |
+| Variable                          | Description                                  | Default                      |
+| --------------------------------- | -------------------------------------------- | ---------------------------- |
+| `CONFIG_PATH`                     |                                              | `/config/`                   |
+| `DATA_PATH`                       |                                              | `/data/`                     |
+| `DB_SQLITE_PATH`                  |                                              | `${DATA_PATH}/db/`           |
+| `HOMESERVER_ADDRESS`              |                                              | `https://example.com`        |
+| `HOMESERVER_DOMAIN`               |                                              | `example.com`                |
+| `HOMESERVER_ENABLE_ASYNC_UPLOADS` |                                              | `false`                      |
+| `HOMESERVER_HTTP_RETRY_COUNT`     |                                              | `4`                          |
+| `HOMESERVER_SOFTWARE`             |                                              | `standard`                   |
+| `HOMESERVER_TLS_VERIFY`           |                                              | `TRUE`                       |
+| `LOG_LEVEL`                       | `INFO`, `WARN`, `ERROR`, `CRITICAL`, `DEBUG` | `INFO`                       |
+| `LOG_PATH`                        |                                              | `/logs/`                     |
+| `LOG_TYPE`                        | `CONSOLE`, `FILE`, `BOTH`                    | `FILE`                       |
+| `MODE`                            | `ALL`,`FACEBOOK`                             |                              |
+| `REGISTRATION_PATH`               |                                              | `${DATA_PATH}/registrations` |
 
 #### Facebook
 
@@ -141,7 +141,7 @@ Be sure to view the following repositories to understand all the customizable op
 | `FACEBOOK_DB_PORT`                                                 |             | `5432`                                       |
 | `FACEBOOK_DB_SQLITE_FILE`                                          |             | `facebook.db`                                |
 | `FACEBOOK_DB_SQLITE_PATH`                                          |             | `${DB_SQLITE_PATH}`                          |
-| `FACEBOOK_DB_TYPE`                                                 |             | `SQLITE`                                     |
+| `FACEBOOK_DB_TYPE`                                                 | `POSTGRESQL` `SQLITE`            | `SQLITE`                                     |
 | `FACEBOOK_DISABLE_BRIDGE_NOTICES=$FACEBOOK_DISABLE_BRIDGE_NOTICES` |             | `FALSE`                                      |
 | `FACEBOOK_ENABLE_DELIVERY_ERROR_REPORTS`                           |             | `TRUE`                                       |
 | `FACEBOOK_ENABLE_DELIVERY_RECEIPTS`                                |             | `FALSE`                                      |
@@ -217,8 +217,11 @@ Be sure to view the following repositories to understand all the customizable op
 
 ### Networking
 
-| Port | Protocol | Description |
-| ---- | -------- | ----------- |
+| Port  | Protocol | Description      |
+| ----- | -------- | ---------------- |
+| 29319 | tcp      | Facebook Bridge  |
+| 3200  | tcp      | Facebook Metrics |
+
 
 ## Maintenance
 ### Shell Access
@@ -250,4 +253,4 @@ MIT. See [LICENSE](LICENSE) for more details.
 
 ## References
 
-* <https://>
+* <https://github.com/mautrix/facebook>
