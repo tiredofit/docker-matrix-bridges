@@ -1,0 +1,16 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_twitter"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_twitter
+
+check_container_initialized
+check_service_initialized 10-matrix_bridges
+
+liftoff
+
+print_start "Starting Twitter bridge version ${TWITTER_VERSION}"
+silent s6-setuidgid matrix exec python3 \
+                                    -m mautrix_twitter \
+                                    -c "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"

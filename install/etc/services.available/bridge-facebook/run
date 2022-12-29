@@ -1,0 +1,17 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_facebook"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_facebook
+
+check_container_initialized
+#check_service_initialized 10-matrix_bridges-init
+
+liftoff
+
+print_start "Starting Facebook bridge version ${FACEBOOK_VERSION}"
+cd /home/matrix
+sudo -u matrix exec python3 \
+                                    -m mautrix_facebook \
+                                    -c "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"

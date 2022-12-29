@@ -1,0 +1,25 @@
+version: '2.4'
+services:
+
+  matrix-bridges-app:
+    image: tiredofit/matrix-bridges:latest
+    container_name: matrix-bridges-app
+    volumes:
+      - ./config:/config
+      - ./data:/data
+      - ./logs:/logs
+    environment:
+      - TIMEZONE=America/Vancouver
+      - CONTAINER_NAME=matrix-bridges-app
+      - SETUP_TYPE=AUTO
+
+      - MODE=facebook
+    networks:
+      - services
+    restart: always
+
+networks:
+  proxy:
+    external: true
+  services:
+    external: true

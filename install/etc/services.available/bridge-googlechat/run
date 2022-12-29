@@ -1,0 +1,16 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_googlechat"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_googlechat
+
+check_container_initialized
+check_service_initialized 10-matrix_bridges
+
+liftoff
+
+print_start "Starting Google Chat bridge version ${GOOGLECHAT_VERSION}"
+silent s6-setuidgid matrix exec python3 \
+                                    -m mautrix_googlechat \
+                                    -c "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"

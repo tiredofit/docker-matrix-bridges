@@ -1,0 +1,73 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+source /assets/functions/matrix_bridges
+set -a
+source /assets/defaults/matrix_bridges
+set +a
+
+
+PROCESS_NAME="matrix_bridges"
+
+bootstrap_filesystem
+setup_bridges
+
+if [ ! -f "/tmp/.container/container-restart" ] ; then
+    mkdir -p "${CONFIG_PATH}"
+
+    if var_true "${ENABLE_DISCORD}" ; then
+        configure_discord
+    else
+        rm -rf /etc/services.available/bridge-discord
+    fi
+
+    if var_true "${ENABLE_FACEBOOK}" ; then
+        configure_facebook
+    else
+        rm -rf /etc/services.available/bridge-facebook
+    fi
+
+    if var_true "${ENABLE_GOOGLECHAT}" ; then
+        configure_googlechat
+    else
+        rm -rf /etc/services.available/bridge-googlechat
+    fi
+
+    if var_true "${ENABLE_INSTAGRAM}" ; then
+        configure_instagram
+    else
+        rm -rf /etc/services.available/bridge-instagram
+    fi
+
+    if var_true "${ENABLE_SIGNAL}" ; then
+        configure_signal
+    else
+        rm -rf /etc/services.available/bridge-signal
+    fi
+
+    if var_true "${ENABLE_SLACK}" ; then
+        configure_slack
+    else
+        rm -rf /etc/services.available/bridge-slack
+    fi
+
+    if var_true "${ENABLE_TELEGRAM}" ; then
+        configure_telegram
+    else
+        rm -rf /etc/services.available/bridge-telegram
+    fi
+
+    if var_true "${ENABLE_TWITTER}" ; then
+        configure_twitter
+    else
+        rm -rf /etc/services.available/bridge-twitter
+    fi
+
+    if var_true "${ENABLE_WHATSAPP}" ; then
+        configure_whatsapp
+    else
+        rm -rf /etc/services.available/bridge-whatsapp
+    fi
+fi
+
+liftoff

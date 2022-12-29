@@ -1,0 +1,561 @@
+#!/command/with-contenv bash
+
+bootstrap_filesystem() {
+    if [ -d "${CONFIG_PATH}" ] ; then
+        mkdir -p "${CONFIG_PATH}"
+    fi
+    if [ $(stat -c %U "${CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${CONFIG_PATH}" ; fi
+
+    if [ -d "${DATA_PATH}" ] ; then
+        mkdir -p "${DATA_PATH}"
+    fi
+    if [ $(stat -c %U "${DATA_PATH}") != "matrix" ] ; then chown matrix:matrix "${DATA_PATH}" ; fi
+
+    if [ -d "${LOG_PATH}" ] ; then
+        mkdir -p "${LOG_PATH}"
+    fi
+    if [ $(stat -c %U "${LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${LOG_PATH}" ; fi
+    create_logrotate matrix_bridges "${LOG_PATH}"/*.log matrix matrix
+
+    if [ -d "${REGISTRATION_PATH}" ] ; then
+        mkdir -p "${REGISTRATION_PATH}"
+    fi
+    if [ $(stat -c %U "${REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${REGISTRATION_PATH}" ; fi
+
+}
+
+configure_discord() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        if [ -f "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}" ]; then
+            sudo matrix cp -R /assets/config/facebook/example.config.yml "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+        fi
+
+        # /opt/mautrix-discord is read-only, so disable file logging if it's pointing there.
+        #if [[ "$(yq e '.logging.directory' /data/config.yaml)" == "./logs" ]]; then
+        #    yq -I4 e -i '.logging.file_name_format = ""' /data/config.yaml
+        #fi
+        ## Do some config here
+
+        create_logrotate bridge_discord "${DISCORD_LOG_PATH}"/"${DISCORD_LOG_FILE}" matrix matrix
+
+        if [ ! -f "${DISCORD_DATA_PATH}"/"${DISCORD_REGISTRATION_FILE}" ]; then
+            s6-setuidgid matrix mkdir -p "${DISCORD_DATA_PATH}"
+            s6-setuidgid matrix /usr/bin/mautrix-discord \
+                                                    -g \
+                                                    -c /data/config.yaml \
+                                                    -r "${DISCORD_DATA_PATH}"/"${DISCORD_REGISTRATION_FILE}"
+
+
+            print_notice "[configure_discord] Didn't find a registration file. Autogenerating to '${DISCORD_DATA_PATH}/${DISCORD_REGISTRATION_FILE}'"
+            print_notice "[configure_discord] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        fi
+    fi
+}
+
+configure_facebook() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        set -a
+        source /assets/defaults/bridge_facebook
+        set +a
+        print_debug "[configure_facebook]"
+        if [ ! -d "${FACEBOOK_CONFIG_PATH}" ] ; then
+            mkdir -p "${FACEBOOK_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${FACEBOOK_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${FACEBOOK_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${FACEBOOK_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${FACEBOOK_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${FACEBOOK_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${FACEBOOK_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${FACEBOOK_LOG_PATH}" ] ; then
+            mkdir -p "${FACEBOOK_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${FACEBOOK_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${FACEBOOK_LOG_PATH}" ; fi
+
+        case "${FACEBOOK_DB_TYPE,,}" in
+            postgres* )
+                sanity_var FACEBOOK_DB_USER "DB Username for Facebook"
+                sanity_var FACEBOOK_DB_PASS "DB Password for Facebook"
+                sanity_var FACEBOOK_DB_HOST "DB Host for Facebook"
+                sanity_var FACEBOOK_DB_NAME "DB Name for Facebook"
+                counter=0
+                export PGPASSWORD=${FACEBOOK_DB_PASS}
+                until pg_isready --dbname="${FACEBOOK_DB_NAME}" --host="${FACEBOOK_DB_HOST}" --port="${FACEBOOK_DB_PORT}" --username="${FACEBOOK_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${FACEBOOK_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                export FACEBOOK_DB_STRING=${FACEBOOK_DB_STRING:-"postgres://${FACEBOOK_DB_USER}:${FACEBOOK_DB_PASS}@${FACEBOOK_DB_HOST}:${FACEBOOK_DB_PORT}/${FACEBOOK_DB_NAME}"}
+            set +x
+            ;;
+            sqlite* )
+                if [ ! -d "${FACEBOOK_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${FACEBOOK_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${FACEBOOK_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${FACEBOOK_DB_SQLITE_PATH}" ; fi
+
+                export FACEBOOK_DB_STRING=${FACEBOOK_DB_STRING:-"sqlite://${FACEBOOK_DB_SQLITE_PATH}/${FACEBOOK_DB_SQLITE_FILE}"}
+            ;;
+        esac
+
+        if [ ! -f "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/facebook/example.config.yaml "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(FACEBOOK_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(FACEBOOK_HOMESERVER_DOMAIN) |
+                                        .homeserver.verify_ssl = env(FACEBOOK_HOMESERVER_TLS_VERIFY) |
+                                        .homeserver.software = env(FACEBOOK_HOMESERVER_SOFTWARE) |
+                                        .homeserver.http_retry_count = env(FACEBOOK_HOMESERVER_HTTP_RETRY_COUNT) |
+                                        .homeserver.status_endpoint = env(FACEBOOK_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(FACEBOOK_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(FACEBOOK_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i    '
+                                        .appservice.address = env(FACEBOOK_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(FACEBOOK_LISTEN_IP) |
+                                        .appservice.port = env(FACEBOOK_LISTEN_PORT) |
+                                        .appservice.max_body_size = env(FACEBOOK_MAX_BODY_SIZE) |
+                                        .appservice.database = env(FACEBOOK_DB_STRING) |
+                                        .appservice.database_opts.min_size = env(FACEBOOK_DB_MIN_SIZE) |
+                                        .appservice.database_opts.max_size = env(FACEBOOK_DB_MAX_SIZE) |
+                                        .appservice.id = env(FACEBOOK_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(FACEBOOK_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(FACEBOOK_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(FACEBOOK_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(FACEBOOK_ENABLE_EPHEMERAL_EVENTS)
+                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+
+
+        if [ -f "${FACEBOOK_REGISTRATION_PATH}"/"${FACEBOOK_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}" && [ -z "${FACEBOOK_AS_TOKEN}" ] ; then
+            print_debug "[configure_facebook] Setting as_token in configuration from previously generated registration file"
+            export TOI_FACEBOOK_AS_TOKEN=$(yq '.as_token' "${FACEBOOK_REGISTRATION_PATH}"/"${FACEBOOK_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_FACEBOOK_AS_TOKEN)
+                                        ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+            fbastokenskip=true
+        elif [ -n "${FACEBOOK_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"; then
+            print_notice "You've supplied 'FACEBOOK_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${FACEBOOK_AS_TOKEN}" ] ; then
+            print_debug "[configure_facebook] Updating FACEBOOK_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(FACEBOOK_AS_TOKEN)
+                                        ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+        fi
+
+        if [ -f "${FACEBOOK_REGISTRATION_PATH}"/"${FACEBOOK_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}" && [ -z "${FACEBOOK_HS_TOKEN}" ] ; then
+            print_debug "[configure_facebook] Setting hs_token in configuration from previously generated registration file"
+            export TOI_FACEBOOK_HS_TOKEN=$(yq '.hs_token' "${FACEBOOK_REGISTRATION_PATH}"/"${FACEBOOK_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_FACEBOOK_HS_TOKEN)
+                                        ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+            fbhstokenskip=true
+        elif [ -n "${FACEBOOK_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"; then
+            print_notice "You've supplied 'FACEBOOK_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${FACEBOOK_HS_TOKEN}" ] ; then
+            print_debug "[configure_facebook] Updating FACEBOOK_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(FACEBOOK_HS_TOKEN)
+                                        ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i    '
+                                        .appservice.public.enabled = env(FACEBOOK_ENABLE_PUBLIC) |
+                                        .appservice.public.prefix = env(FACEBOOK_PUBLIC_PREFIX) |
+                                        .appservice.public.external = env(FACEBOOK_PUBLIC_EXTERNAL_URL) |
+                                        .appservice.public.shared_secret = env(FACEBOOK_PUBLIC_SHARED_SECRET) |
+                                        .appservice.public.allow_matrix_login = env(FACEBOOK_ALLOW_MATRIX_LOGIN) |
+                                        .appservice.public.segment_key = env(FACEBOOK_SEGMENT_API_KEY)
+                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i    '
+                                        .metrics.enabled = env(FACEBOOK_ENABLE_METRICS) |
+                                        .metrics.listen_port = env(FACEBOOK_METRICS_LISTEN_PORT)
+                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i    '
+                                        .manhole.enabled = env(FACEBOOK_ENABLE_MANHOLE) |
+                                        .manhole.path = env(FACEBOOK_MANHOLE_SOCKET) |
+                                        .manhole.whitelist = [ "'$(echo ${FACEBOOK_MANHOLE_WHITELIST//,/\",\"})'" ]
+                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+# Whitelist     - '0'
+        s6-setuidgid matrix yq -i    '
+                                        .bridge.username_template = strenv(FACEBOOK_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = "'$(echo ${FACEBOOK_TEMPLATE_DISPLAYNAME})'" |
+                                        .bridge.displayname_preference = [ "'$(echo ${FACEBOOK_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
+                                        .bridge.command_prefix = "'$(echo ${FACEBOOK_COMMAND_PREFIX})'" |
+                                        .bridge.invite_own_puppet_to_pm = env(FACEBOOK_INVITE_OWN_PUPPET_TO_PM) |
+                                        .bridge.sync_direct_chat_list = env(FACEBOOK_SYNC_DIRECT_CHAT_LIST) |
+                                        .bridge.presence_from_facebook = env(FACEBOOK_BRIDGE_PRESENCE) |
+                                        .bridge.update_avatar_initial_sync = env(FACEBOOK_SYNC_UPDATE_AVATAR) |
+                                        .bridge.delivery_receipts = env(FACEBOOK_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.delivery_error_reports = env(FACEBOOK_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                        .bridge.message_status_events = env(FACEBOOK_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.allow_invites = env(FACEBOOK_ALLOW_INVITES) |
+                                        .bridge.federate_rooms = env(FACEBOOK_FEDERATE_ROOMS) |
+                                        .bridge.backfill.enable = env(FACEBOOK_BACKFILL_ENABLE) |
+                                        .bridge.backfill.msc2716 = env(FACEBOOK_BACKFILL_ENABLE_MSC2716) |
+                                        .bridge.backfill.max_conversations = env(FACEBOOK_BACKFILL_MAX_CONVERSATIONS) |
+                                        .bridge.backfill.min_sync_thread_delay = env(FACEBOOK_BACKFILL_SYNC_THREAD_DELAY) |
+                                        .bridge.backfill.unread_hours_threshold = env(FACEBOOK_BACKFILL_UNREAD_HOURS_THRESHOLD) |
+                                        .bridge.periodic_reconnect.interval = env(FACEBOOK_PERIODIC_RECONNECT_INTERVAL) |
+                                        .bridge.periodic_reconnect.refresh = env(FACEBOOK_PERIODIC_RECONNECT_MODE) |
+                                        .bridge.periodic_reconnect.always = env(FACEBOOK_PERIODIC_RECONNECT_ALWAYS) |
+                                        .bridge.periodic_reconnect.min_connected_time = env(FACEBOOK_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
+                                        .bridge.resync_max_disconnected_time = env(FACEBOOK_RESYNC_MAX_DISCONNECTED_TIME) |
+                                        .bridge.sync_on_startup = env(FACEBOOK_SYNC_ON_STARTUP) |
+                                        .bridge.temporary_disconnect_notices = env(FACEBOOK_ |
+                                        .bridge.on_reconnection_fail. = env(FACEBOOK_RECONNECTION_FAIL) |
+                                        .bridge.on_reconnection_fail.action = env(FACEBOOK_RECONNECTION_FAIL_ACTION) |
+                                        .bridge.on_reconnection_fail.wait_for = env(FACEBOOK_RECONNECTION_FAIL_WAIT) |
+                                        .bridge.disable_bridge_notices = env(FACEBOOK_BRDIGE_NOTICES) |
+                                        .bridge.resend_bridge_info = env(FACEBOOK_RESEND_BRIDGE_INFO) |
+                                        .bridge.mute_bridging = env(FACEBOOK_MUTE_BRIDGING) |
+                                        .bridge.tag_only_on_create = env(FACEBOOK_TAG_ONLY_ON_CREATE) |
+                                        .bridge.sandbox_media_download = env(FACEBOOK_SANDBOX_MEDIA_DOWNLOAD) |
+                                        .bridge.get_proxy_api_url = = env(FACEBOOK_GET_PROXY_API_URL) |
+                                        .bridge.encryption.allow = env(FACEBOOK_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(FACEBOOK_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(FACEBOOK_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(FACEBOOK_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(FACEBOOK_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(FACEBOOK_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(FACEBOOK_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(FACEBOOK_ENCRYPTION_ROTATION_MESSAGES)
+                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${FACEBOOK_PERMISSIONS_RELAY}" ] ; then
+            fbrelays=$(echo "${FACEBOOK_PERMISSIONS_RELAY}" | tr "," "\n")
+            for fbrelay in $fbrelays; do
+                if [ "$fbrelay" = "*" ] ; then
+                    export FBRELAY="PLACEHOLDERASTERISK"
+                else
+                    export FBRELAY=$fbrelay
+                fi
+                s6-setuidgid matrix yq -i    '
+                                            .bridge.permissions.[  "'$(echo ${FBRELAY})'" ]+= "relay"
+                                        ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${FACEBOOK_PERMISSIONS_ADMIN}" ] ; then
+            fbadmins=$(echo "${FACEBOOK_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for fbadmin in $fbadmins; do
+                if [ "$fbadmin" = "*" ] ; then
+                    export FBADMIN="PLACEHOLDERASTERISK"
+                else
+                    export FBADMIN=$fbadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${FBADMIN})'" ] += "admin"
+                                            ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${FACEBOOK_PERMISSIONS_USER}" ] ; then
+            fbusers=$(echo "${FACEBOOK_PERMISSIONS_USER}" | tr "," "\n")
+            for fbuser in $fbusers; do
+                if [ "$fbuser" = "*" ] ; then
+                    export FBUSER="PLACEHOLDERASTERISK"
+                else
+                    export FBUSER=$fbuser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(FBUSER)] += "user"
+                                            ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+        fi
+
+        case "${FACEBOOK_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_facebook "${FACEBOOK_LOG_PATH}"/"${FACEBOOK_LOG_FILE}" matrix matrix bridge_facebook
+                export FACEBOOK_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export FACEBOOK_LOG_TYPE="console"
+            ;;
+            "file" )
+                create_logrotate bridge_facebook "${FACEBOOK_LOG_PATH}"/"${FACEBOOK_LOG_FILE}" matrix matrix bridge_facebook
+                export FACEBOOK_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i    '
+                                        .logging.version = 1 |
+                                        .logging.handlers.file.class = "logging.FileHandler" |
+                                        .logging.handlers.file.filename = "'$(echo "${FACEBOOK_LOG_PATH}/${FACEBOOK_LOG_FILE}")'" |
+                                        del(.logging.handlers.file.backupCount) |
+                                        del(.logging.handlers.file.maxBytes) |
+                                        .logging.loggers.mau.level = env(FACEBOOK_LOG_LEVEL_MAU) |
+                                        .logging.loggers.maufbapi.level = env(FACEBOOK_LOG_LEVEL_MAUFBAPI) |
+                                        .logging.loggers.paho.level = env(FACEBOOK_LOG_LEVEL_PAHO) |
+                                        .logging.loggers.aiohttp.level = env(FACEBOOK_LOG_LEVEL_AIOHTTP) |
+                                        .logging.root.level = env(FACEBOOK_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${FACEBOOK_LOG_TYPE,,//,/\",\"}")'" ]
+                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+
+        create_logrotate bridge_facebook "${FACEBOOK_LOG_PATH}"/"${FACEBOOK_LOG_FILE}" matrix matrix bridge_facebook
+
+        if [ ! -f "${FACEBOOK_REGISTRATION_PATH}"/"${FACEBOOK_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_facebook] Didn't find a registration file. Generating to '${FACEBOOK_REGISTRATION_PATH}/${FACEBOOK_REGISTRATION_FILE}'"
+            fb_generate_registration=true
+        elif var_true "${FACEBOOK_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_facebook] Regenerating registration file to '${FACEBOOK_REGISTRATION_PATH}/${FACEBOOK_REGISTRATION_FILE}'"
+            fb_generate_registration=true
+        elif var_true "${fb_force_registration}" ; then
+            print_notice "[configure_facebook] Something has changed  - Force generating registration file to '${FACEBOOK_REGISTRATION_PATH}/${FACEBOOK_REGISTRATION_FILE}'"
+            fb_generate_registration=true
+        fi
+
+        if var_true "${fb_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${FACEBOOK_REGISTRATION_PATH}"
+            s6-setuidgid matrix python3 -m mautrix_facebook \
+                                                        -g \
+                                                        -c "${FACEBOOK_CONFIG_PATH}"/${FACEBOOK_CONFIG_FILE} \
+                                                        -r "${FACEBOOK_REGISTRATION_PATH}"/"${FACEBOOK_REGISTRATION_FILE}" \
+                                                        || exit $?
+            print_notice "[configure_facebook] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
+        fi
+    fi
+}
+
+configure_googlechat() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        if [ -f "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}" ]; then
+            sudo matrix cp -R /assets/config/googlechat/example.config.yml "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+        fi
+
+#        if [[ "$(yq e '.logging.handlers.file.filename' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}")" == "./mautrix-googlechat.log" ]]; then
+#            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+#            yq -I4 e -i 'del(.logging.handlers.file)' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+#        fi
+        ## Do some config here
+
+        create_logrotate bridge_googlechat "${GOOGLECHAT_LOG_PATH}"/"${GOOGLECHAT_LOG_FILE}" matrix matrix
+
+        if [ ! -f "${GOOGLECHAT_DATA_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}" ]; then
+            python3 -m mautrix_googlechat \
+                    -g \
+                    -c "${GOOGLECHAT_CONFIG_PATH}"/${GOOGLECHAT_CONFIG_FILE} \
+                    -r "${GOOGLECHAT_DATA_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}" \
+                    || exit $?
+
+            print_notice "[configure_googlechat] Didn't find a registration file. Autogenerating to '${GOOGLECHAT_DATA_PATH}/${GOOGLECHAT_REGISTRATION_FILE}'"
+            print_notice "[configure_googlechat] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        fi
+    fi
+}
+
+configure_instagram() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        if [ -f "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}" ]; then
+            sudo matrix cp -R /assets/config/instagram/example.config.yml "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+        fi
+
+
+
+#        if [[ "$(yq e '.logging.handlers.file.filename' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}")" == "./mautrix-instagram.log" ]]; then
+#            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+#            yq -I4 e -i 'del(.logging.handlers.file)' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+#        fi
+        ## Do some config here
+
+        create_logrotate bridge_instagram "${INSTAGRAM_LOG_PATH}"/"${INSTAGRAM_LOG_FILE}" matrix matrix
+
+        if [ ! -f "${INSTAGRAM_DATA_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}" ]; then
+            s6-setuidgid matrix mkdir -p "${INSTAGRAM_DATA_PATH}"
+            s6-setuidgid matrix python3 -m mautrix_instagram \
+                                                        -g \
+                                                        -c "${INSTAGRAM_CONFIG_PATH}"/${INSTAGRAM_CONFIG_FILE} \
+                                                        -r "${INSTAGRAM_DATA_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}" \
+                                                        || exit $?
+
+            print_notice "[configure_instagram] Didn't find a registration file. Autogenerating to '${INSTAGRAM_DATA_PATH}/${INSTAGRAM_REGISTRATION_FILE}'"
+            print_notice "[configure_instagram] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        fi
+    fi
+}
+
+configure_signal() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        if [ -f "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}" ]; then
+            sudo matrix cp -R /assets/config/signal/example.config.yml "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+        fi
+
+#        if [[ "$(yq e '.logging.handlers.file.filename' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}")" == "./mautrix-signal.log" ]]; then
+#            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+#            yq -I4 e -i 'del(.logging.handlers.file)' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+#        fi
+        ## Do some config here
+
+        create_logrotate bridge_signal "${SIGNAL_LOG_PATH}"/"${SIGNAL_LOG_FILE}" matrix matrix
+
+        if [ ! -f "${SIGNAL_DATA_PATH}"/"${SIGNAL_REGISTRATION_FILE}" ]; then
+            s6-setuidgid matrix mkdir -p "${SIGNAL_DATA_PATH}"
+            s6-setuidgid matrix python3 -m mautrix_signal \
+                                                    -g \
+                                                    -c "${SIGNAL_CONFIG_PATH}"/${SIGNAL_CONFIG_FILE} \
+                                                    -r "${SIGNAL_DATA_PATH}"/"${SIGNAL_REGISTRATION_FILE}" \
+                                                    || exit $?
+
+            print_notice "[configure_signal] Didn't find a registration file. Autogenerating to '${SIGNAL_DATA_PATH}/${SIGNAL_REGISTRATION_FILE}'"
+            print_notice "[configure_signal] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        fi
+    fi
+}
+
+configure_slack() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        if [ -f "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}" ]; then
+            sudo matrix cp -R /assets/config/slack/example.config.yml "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+        fi
+
+        # /opt/mautrix-discord is read-only, so disable file logging if it's pointing there.
+        #if [[ "$(yq e '.logging.directory' /data/config.yaml)" == "./logs" ]]; then
+        #    yq -I4 e -i '.logging.file_name_format = ""' /data/config.yaml
+        #fi
+        ## Do some config here
+
+        create_logrotate bridge_slack "${SLACK_LOG_PATH}"/"${SLACK_LOG_FILE}" matrix matrix
+
+        if [ ! -f "${SLACK_DATA_PATH}"/"${SLACK_REGISTRATION_FILE}" ]; then
+            s6-setuidgid matrix mkdir -p "${SLACK_DATA_PATH}"
+            s6-setuidgid matrix /usr/bin/mautrix-slack \
+                                                -g \
+                                                -c /data/config.yaml \
+                                                -r "${SLACK_DATA_PATH}"/"${SLACK_REGISTRATION_FILE}"
+
+            print_notice "[configure_slack] Didn't find a registration file. Autogenerating to '${SLACK_DATA_PATH}/${SLACK_REGISTRATION_FILE}'"
+            print_notice "[configure_slack] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        fi
+    fi
+}
+
+configure_twitter() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        if [ -f "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}" ]; then
+            sudo matrix cp -R /assets/config/twitter/example.config.yml "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        fi
+
+#        if [[ "$(yq e '.logging.handlers.file.filename' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}")" == "./mautrix-twitter.log" ]]; then
+#            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+#            yq -I4 e -i 'del(.logging.handlers.file)' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+#        fi
+        ## Do some config here
+
+        create_logrotate bridge_twitter "${TWITTER_LOG_PATH}"/"${TWITTER_LOG_FILE}" matrix matrix
+
+        if [ ! -f "${TWITTER_DATA_PATH}"/"${TWITTER_REGISTRATION_FILE}" ]; then
+            s6-setuidgid matrix mkdir -p "${TWITTER_DATA_PATH}"
+            s6-setuidgid matrix python3 -m mautrix_twitter \
+                                                    -g \
+                                                    -c "${TWITTER_CONFIG_PATH}"/${TWITTER_CONFIG_FILE} \
+                                                    -r "${TWITTER_DATA_PATH}"/"${TWITTER_REGISTRATION_FILE}" \
+                                                    || exit $?
+
+            print_notice "[configure_twitter] Didn't find a registration file. Autogenerating to '${TWITTER_DATA_PATH}/${TWITTER_REGISTRATION_FILE}'"
+            print_notice "[configure_twitter] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        fi
+    fi
+}
+
+configure_whatsapp() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        if [ -f "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}" ]; then
+            sudo matrix cp -R /assets/config/whatsapp/example.config.yml "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+        fi
+
+        # /opt/mautrix-discord is read-only, so disable file logging if it's pointing there.
+        #if [[ "$(yq e '.logging.directory' /data/config.yaml)" == "./logs" ]]; then
+        #    yq -I4 e -i '.logging.file_name_format = ""' /data/config.yaml
+        #fi
+        ## Do some config here
+
+        create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" matrix matrix
+
+        if [ ! -f "${WHATSAPP_DATA_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" ]; then
+            s6-setuidgid matrix mkdir -p "${WHATSAPP_DATA_PATH}"
+            s6-setuidgid matrix /usr/bin/mautrix-whatsapp \
+                                                    -g \
+                                                    -c /data/config.yaml \
+                                                    -r "${WHATSAPP_DATA_PATH}"/"${WHATSAPP_REGISTRATION_FILE}"
+
+            print_notice "[configure_whatsapp] Didn't find a registration file. Autogenerating to '${WHATSAPP_DATA_PATH}/${WHATSAPP_REGISTRATION_FILE}'"
+            print_notice "[configure_whatsapp] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        fi
+    fi
+}
+
+setup_bridges() {
+    if [ -f "/tmp/.container/matrix_bridges/.bridge-env" ]; then
+        print_debug "[setup_bridges] Importing BRIDGE environment generated variables"
+        source /tmp/.container/matrix_bridges/.bridge-env
+    else
+        mkdir -p /tmp/.container/matrix_bridges/
+        if [ "${MODE,,}" = "ALL" ] ; then
+            print_debug "[setup_container_mode] Container Mode: ALL"
+            print_debug "[setup_container_mode] Creating BRIDGE environment generated variables"
+            ENABLE_DISCORD=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_FACEBOOK=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_GOOGLECHAT=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_INSTAGRAM=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_SIGNAL=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_SLACK=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_TELEGRAM=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_TWITTER=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_WHATSAPP=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+        else
+            modes=$(echo "${MODE,,}" | tr "," "\n")
+            for mode in $modes
+            do
+                case "${mode,,}" in
+                    "discord")
+                        echo "ENABLE_DISCORD=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "facebook")
+                        echo "ENABLE_FACEBOOK=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "google*")
+                        echo "ENABLE_GOOGLECHAT=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "instagram")
+                        echo "ENABLE_INSTAGRAM=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "signal")
+                        echo "ENABLE_SIGNAL=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "slack")
+                        echo "ENABLE_SLACK=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "telegram")
+                        echo "ENABLE_TELEGRAM=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "twitter")
+                        echo "ENABLE_TWITTER=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "whatsapp")
+                        echo "ENABLE_WHATSAPP=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    *)
+                        print_error "[setup_bridges] Unknown 'BRIDGE' environment variable - exitting.."
+                        exit 1
+                    ;;
+                esac
+            done
+        fi
+        source /tmp/.container/matrix_bridges/.bridge-env
+    fi
+}

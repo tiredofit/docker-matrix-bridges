@@ -1,0 +1,14 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_slack"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_slack
+
+check_container_initialized
+check_service_initialized 10-matrix_bridges
+
+liftoff
+
+print_start "Starting Slack bridge version ${SLACK_VERSION}"
+silent s6-setuidgid matrix exec exec /usr/bin/mautrix-slack

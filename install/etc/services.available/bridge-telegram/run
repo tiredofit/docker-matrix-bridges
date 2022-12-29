@@ -1,0 +1,16 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_telegram"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_telegram
+
+check_container_initialized
+check_service_initialized 10-matrix_bridges
+
+liftoff
+
+print_start "Starting Telegram bridge version ${TELEGRAM_VERSION}"
+silent s6-setuidgid matrix exec python3 \
+                                    -m mautrix_telegram \
+                                    -c "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"

@@ -1,0 +1,16 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_instagram"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_instagram
+
+check_container_initialized
+check_service_initialized 10-matrix_bridges
+
+liftoff
+
+print_start "Starting Instagram bridge version ${INSTAGRAM_VERSION}"
+silent s6-setuidgid matrix exec python3 \
+                                    -m mautrix_instagram \
+                                    -c "${INSTAGRAM_CONFIG_PATH}"/"${INSTRAGRAM_CONFIG_FILE}"

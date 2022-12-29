@@ -1,0 +1,16 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_signal"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_signal
+
+check_container_initialized
+check_service_initialized 10-matrix_bridges
+
+liftoff
+
+print_start "Starting Signal bridge version ${SIGNAL_VERSION}"
+silent s6-setuidgid matrix exec python3 \
+                                    -m mautrix_signal \
+                                    -c "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
