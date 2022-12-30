@@ -18,9 +18,9 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"main"} \
     GOOGLECHAT_VERSION=${GOGGLECHAT_VERSION:-"v0.4.0"} \
     INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"v0.2.2"} \
     SLACK_VERSION=${SLACK_VERSION:-"main"} \
-    TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v.0.12.2"} \
+    TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.12.2"} \
     TWITTER_VERSION=${TWITTER_VERSION:-"v0.1.5"} \
-    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.7.2"} \
+    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.8.0"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
     FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     GOOGLECHAT_REPO_URL=https://github.com/mautrix/googlechat \
@@ -80,7 +80,7 @@ RUN source assets/functions/00-container && \
                     py3-olm \
                     py3-paho-mqtt \
                     py3-pillow \
-                    #py3-prometheus-client \
+                    py3-prometheus-client \
                     py3-pycryptodome \
                     py3-pysocks \
                     py3-ruamel.yaml \
@@ -106,7 +106,7 @@ RUN source assets/functions/00-container && \
                     py3-magic \
                     py3-olm \
                     py3-pillow \
-                    #py3-prometheus-client \
+                    py3-prometheus-client \
                     py3-protobuf \
                     py3-pycryptodome \
                     py3-pysocks \
@@ -162,7 +162,7 @@ RUN source assets/functions/00-container && \
                     py3-olm \
                     py3-phonenumbers \
                     py3-pillow \
-                    #py3-prometheus-client \
+                    py3-prometheus-client \
                     py3-protobuf \
                     py3-pycryptodome \
                     py3-qrcode \
@@ -182,6 +182,7 @@ RUN source assets/functions/00-container && \
                     libffi-dev  \
                     py3-pip \
                     py3-setuptools \
+                    py3-setuptools-rust \
                     py3-wheel \
                     py3-pillow \
                     python3-dev \

@@ -207,11 +207,10 @@ configure_facebook() {
                                         .bridge.periodic_reconnect.min_connected_time = env(FACEBOOK_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
                                         .bridge.resync_max_disconnected_time = env(FACEBOOK_RESYNC_MAX_DISCONNECTED_TIME) |
                                         .bridge.sync_on_startup = env(FACEBOOK_SYNC_ON_STARTUP) |
-                                        .bridge.temporary_disconnect_notices = env(FACEBOOK_ |
-                                        .bridge.on_reconnection_fail. = env(FACEBOOK_RECONNECTION_FAIL) |
+                                        .bridge.temporary_disconnect_notices = env(FACEBOOK_TEMPORARY_DISCONNECT_NOTICES) |
                                         .bridge.on_reconnection_fail.action = env(FACEBOOK_RECONNECTION_FAIL_ACTION) |
                                         .bridge.on_reconnection_fail.wait_for = env(FACEBOOK_RECONNECTION_FAIL_WAIT) |
-                                        .bridge.disable_bridge_notices = env(FACEBOOK_BRDIGE_NOTICES) |
+                                        .bridge.disable_bridge_notices = env(FACEBOOK_BRIDGE_NOTICES) |
                                         .bridge.resend_bridge_info = env(FACEBOOK_RESEND_BRIDGE_INFO) |
                                         .bridge.mute_bridging = env(FACEBOOK_MUTE_BRIDGING) |
                                         .bridge.tag_only_on_create = env(FACEBOOK_TAG_ONLY_ON_CREATE) |
@@ -229,6 +228,13 @@ configure_facebook() {
                                         .bridge.encryption.rotation.milliseconds = env(FACEBOOK_ENCRYPTION_ROTATION_MILLISECONDS) |
                                         .bridge.encryption.rotation.messages = env(FACEBOOK_ENCRYPTION_ROTATION_MESSAGES)
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+
+
+
+
+
+
+
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
         set -f
@@ -474,27 +480,277 @@ configure_twitter() {
 
 configure_whatsapp() {
     if [ "${SETUP_TYPE,,}" = "auto" ] ; then
-        if [ -f "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}" ]; then
-            sudo matrix cp -R /assets/config/whatsapp/example.config.yml "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+        set -a
+        source /assets/defaults/bridge_whatsapp
+        set +a
+        print_debug "[configure_whatsapp]"
+        if [ ! -d "${WHATSAPP_CONFIG_PATH}" ] ; then
+            mkdir -p "${WHATSAPP_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${WHATSAPP_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${WHATSAPP_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${WHATSAPP_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${WHATSAPP_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${WHATSAPP_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${WHATSAPP_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${WHATSAPP_LOG_PATH}" ] ; then
+            mkdir -p "${WHATSAPP_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${WHATSAPP_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${WHATSAPP_LOG_PATH}" ; fi
+
+        case "${WHATSAPP_DB_TYPE,,}" in
+            postgres* )
+                sanity_var WHATSAPP_DB_USER "DB Username for Facebook"
+                sanity_var WHATSAPP_DB_PASS "DB Password for Facebook"
+                sanity_var WHATSAPP_DB_HOST "DB Host for Facebook"
+                sanity_var WHATSAPP_DB_NAME "DB Name for Facebook"
+                counter=0
+                export PGPASSWORD=${WHATSAPP_DB_PASS}
+                until pg_isready --dbname="${WHATSAPP_DB_NAME}" --host="${WHATSAPP_DB_HOST}" --port="${WHATSAPP_DB_PORT}" --username="${WHATSAPP_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${WHATSAPP_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                export WHATSAPP_DB_TYPE=postgres
+                export WHATSAPP_DB_STRING=${WHATSAPP_DB_STRING:-"postgres://${WHATSAPP_DB_USER}:${WHATSAPP_DB_PASS}@${WHATSAPP_DB_HOST}:${WHATSAPP_DB_PORT}/${WHATSAPP_DB_NAME}"}
+            set +x
+            ;;
+            sqlite* )
+                if [ ! -d "${WHATSAPP_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${WHATSAPP_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${WHATSAPP_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${WHATSAPP_DB_SQLITE_PATH}" ; fi
+                export WHATSAPP_DB_TYPE=sqlite-fk-wal
+                export WHATSAPP_DB_STRING=${WHATSAPP_DB_STRING:-"file://${WHATSAPP_DB_SQLITE_PATH}/${WHATSAPP_DB_SQLITE_FILE}?_txlock=immediate"}
+            ;;
+        esac
+
+        if [ ! -f "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/whatsapp/example.config.yaml "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
         fi
 
-        # /opt/mautrix-discord is read-only, so disable file logging if it's pointing there.
-        #if [[ "$(yq e '.logging.directory' /data/config.yaml)" == "./logs" ]]; then
-        #    yq -I4 e -i '.logging.file_name_format = ""' /data/config.yaml
-        #fi
-        ## Do some config here
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(WHATSAPP_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(WHATSAPP_HOMESERVER_DOMAIN) |
+                                        .homeserver.software = env(WHATSAPP_HOMESERVER_SOFTWARE) |
+                                        .homeserver.status_endpoint = env(WHATSAPP_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(WHATSAPP_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(WHATSAPP_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
-        create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" matrix matrix
+        s6-setuidgid matrix yq -i    '
+                                        .appservice.address = env(WHATSAPP_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(WHATSAPP_LISTEN_IP) |
+                                        .appservice.port = env(WHATSAPP_LISTEN_PORT) |
+                                        .appservice.database.type = env(WHATSAPP_DB_TYPE) |
+                                        .appservice.database.uri = env(WHATSAPP_DB_STRING) |
+                                        .appservice.database.max_open_conns = env(WHATSAPP_DB_CONNECTIONS_MAX_OPEN) |
+                                        .appservice.database.max_idle_conns = env(WHATSAPP_DB_CONNECTIONS_MAX_IDLE) |
+                                        .appservice.database.max_conn_idle_time = env(WHATSAPP_DB_CONNECTIONS_MAX_IDLE_LIFETIME) |
+                                        .appservice.database.max_conn_lifetime = env(WHATSAPP_DB_CONNECTIONS_MAX_LIFETIME) |
+                                        .appservice.id = env(WHATSAPP_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(WHATSAPP_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(WHATSAPP_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(WHATSAPP_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(WHATSAPP_ENABLE_EPHEMERAL_EVENTS) |
+                                        .appservice.async_transactions = env(WHATSAPP_ENABLE_ASYNC_TRANSACTIONS)
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
-        if [ ! -f "${WHATSAPP_DATA_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" ]; then
-            s6-setuidgid matrix mkdir -p "${WHATSAPP_DATA_PATH}"
-            s6-setuidgid matrix /usr/bin/mautrix-whatsapp \
-                                                    -g \
-                                                    -c /data/config.yaml \
-                                                    -r "${WHATSAPP_DATA_PATH}"/"${WHATSAPP_REGISTRATION_FILE}"
 
-            print_notice "[configure_whatsapp] Didn't find a registration file. Autogenerating to '${WHATSAPP_DATA_PATH}/${WHATSAPP_REGISTRATION_FILE}'"
-            print_notice "[configure_whatsapp] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        if [ -f "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}" && [ -z "${WHATSAPP_AS_TOKEN}" ] ; then
+            print_debug "[configure_whatsapp] Setting as_token in configuration from previously generated registration file"
+            export TOI_WHATSAPP_AS_TOKEN=$(yq '.as_token' "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_WHATSAPP_AS_TOKEN)
+                                        ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+            waastokenskip=true
+        elif [ -n "${WHATSAPP_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"; then
+            print_notice "You've supplied 'WHATSAPP_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${WHATSAPP_AS_TOKEN}" ] ; then
+            print_debug "[configure_whatsapp] Updating WHATSAPP_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(WHATSAPP_AS_TOKEN)
+                                        ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+        fi
+
+        if [ -f "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}" && [ -z "${WHATSAPP_HS_TOKEN}" ] ; then
+            print_debug "[configure_whatsapp] Setting hs_token in configuration from previously generated registration file"
+            export TOI_WHATSAPP_HS_TOKEN=$(yq '.hs_token' "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_WHATSAPP_HS_TOKEN)
+                                        ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+            wahstokenskip=true
+        elif [ -n "${WHATSAPP_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"; then
+            print_notice "You've supplied 'WHATSAPP_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${WHATSAPP_HS_TOKEN}" ] ; then
+            print_debug "[configure_whatsapp] Updating WHATSAPP_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(WHATSAPP_HS_TOKEN)
+                                        ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+        fi
+
+
+        s6-setuidgid matrix yq -i    '
+                                        .metrics.enabled = env(WHATSAPP_ENABLE_METRICS) |
+                                        .metrics.listen = "'$(echo ${WHATSAPP_METRICS_LISTEN_IP}:${WHATSAPP_METRICS_LISTEN_PORT})'"
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i    '
+                                        .segment_key = env(WHATSAPP_SEGMENT_API_KEY)
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+
+       s6-setuidgid matrix yq -i    '
+                                        .whatsapp.os_name = env(WHATSAPP_OS_NAME) |
+                                        .whatsapp.browser_name = env(WHATSAPP_BROWSER_NAME)
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i    '
+                                        .manhole.enabled = env(WHATSAPP_ENABLE_MANHOLE) |
+                                        .manhole.path = env(WHATSAPP_MANHOLE_SOCKET) |
+                                        .manhole.whitelist = [ "'$(echo ${WHATSAPP_MANHOLE_WHITELIST//,/\",\"})'" ]
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+
+
+
+        s6-setuidgid matrix yq -i    '
+                                        .appservice.public.enabled = env(WHATSAPP_ENABLE_PUBLIC) |
+                                        .appservice.public.prefix = env(WHATSAPP_PUBLIC_PREFIX) |
+                                        .appservice.public.external = env(WHATSAPP_PUBLIC_EXTERNAL_URL) |
+                                        .appservice.public.shared_secret = env(WHATSAPP_PUBLIC_SHARED_SECRET) |
+                                        .appservice.public.allow_matrix_login = env(WHATSAPP_ALLOW_MATRIX_LOGIN) |
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+
+# Whitelist     - '0'
+        s6-setuidgid matrix yq -i    '
+                                        .bridge.username_template = strenv(WHATSAPP_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = "'$(echo ${WHATSAPP_TEMPLATE_DISPLAYNAME})'" |
+                                        .bridge.personal_filtering_spaces = env(WHATSAPP_PERSONAL_FILTERING_SPACES) |
+                                        .bridge.delivery_receipts = env(WHATSAPP_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.message_status_events = env(WHATSAPP_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.message_error_notices = env(WHATSAPP_ENABLE_MESSAGE_ERROR_NOTICES) |
+                                        .bridge.call_start_notices = env(WHATSAPP_ENABLE_CALL_START_NOTICES) |
+                                        .bridge.identity_change_notices = env(WHATSAPP_ENABLE_IDENTITY_CHANGE_NOTICES) |
+                                        .bridge.portal_message_buffer = env(WHATSAPP_PORTAL_MESSAGE_BUFFER) |
+                                        .bridge. = env(WHATSAPP_) |
+
+
+                                        .bridge.invite_own_puppet_to_pm = env(WHATSAPP_INVITE_OWN_PUPPET_TO_PM) |
+                                        .bridge.sync_direct_chat_list = env(WHATSAPP_SYNC_DIRECT_CHAT_LIST) |
+                                        .bridge.presence_from_facebook = env(WHATSAPP_BRIDGE_PRESENCE) |
+                                        .bridge.update_avatar_initial_sync = env(WHATSAPP_SYNC_UPDATE_AVATAR) |
+                                        .bridge.delivery_receipts = env(WHATSAPP_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.delivery_error_reports = env(WHATSAPP_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                        .bridge.message_status_events = env(WHATSAPP_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.federate_rooms = env(WHATSAPP_FEDERATE_ROOMS) |
+                                        .bridge.command_prefix = "'$(echo ${WHATSAPP_COMMAND_PREFIX})'" |
+                                        .bridge.encryption.allow = env(WHATSAPP_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(WHATSAPP_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(WHATSAPP_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(WHATSAPP_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(WHATSAPP_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(WHATSAPP_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(WHATSAPP_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(WHATSAPP_ENCRYPTION_ROTATION_MESSAGES)
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${WHATSAPP_PERMISSIONS_RELAY}" ] ; then
+            warelays=$(echo "${WHATSAPP_PERMISSIONS_RELAY}" | tr "," "\n")
+            for warelay in $warelays; do
+                if [ "$warelay" = "*" ] ; then
+                    export WARELAY="PLACEHOLDERASTERISK"
+                else
+                    export WARELAY=$warelay
+                fi
+                s6-setuidgid matrix yq -i    '
+                                            .bridge.permissions.[  "'$(echo ${WARELAY})'" ]+= "relay"
+                                        ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${WHATSAPP_PERMISSIONS_ADMIN}" ] ; then
+            waadmins=$(echo "${WHATSAPP_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for waadmin in $waadmins; do
+                if [ "$waadmin" = "*" ] ; then
+                    export WAADMIN="PLACEHOLDERASTERISK"
+                else
+                    export WAADMIN=$waadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${WAADMIN})'" ] += "admin"
+                                            ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${WHATSAPP_PERMISSIONS_USER}" ] ; then
+            wausers=$(echo "${WHATSAPP_PERMISSIONS_USER}" | tr "," "\n")
+            for wauser in $wausers; do
+                if [ "$wauser" = "*" ] ; then
+                    export WAUSER="PLACEHOLDERASTERISK"
+                else
+                    export WAUSER=$wauser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(WAUSER)] += "user"
+                                            ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+        fi
+
+        case "${WHATSAPP_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" matrix matrix bridge_whatsapp
+                export WHATSAPP_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export WHATSAPP_LOG_TYPE="console"
+                export WHATSAPP_LOG_FILE=""
+
+            ;;
+            "file" )
+                create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" matrix matrix bridge_whatsapp
+                export WHATSAPP_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i    '
+                                        .logging.directory = "'$(echo "${WHATSAPP_LOG_PATH}")'" |
+                                        .logging.file_name_format = env(WHATSAPP_LOG_FILE) |
+                                        .logging.print_level = env(WHATSAPP_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${WHATSAPP_LOG_TYPE,,//,/\",\"}")'" ]
+                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+
+        create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" matrix matrix bridge_whatsapp
+
+        if [ ! -f "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_whatsapp] Didn't find a registration file. Generating to '${WHATSAPP_REGISTRATION_PATH}/${WHATSAPP_REGISTRATION_FILE}'"
+            wa_generate_registration=true
+        elif var_true "${WHATSAPP_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_whatsapp] Regenerating registration file to '${WHATSAPP_REGISTRATION_PATH}/${WHATSAPP_REGISTRATION_FILE}'"
+            wa_generate_registration=true
+        elif var_true "${wa_force_registration}" ; then
+            print_notice "[configure_whatsapp] Something has changed  - Force generating registration file to '${WHATSAPP_REGISTRATION_PATH}/${WHATSAPP_REGISTRATION_FILE}'"
+            wa_generate_registration=true
+        fi
+
+        if var_true "${wa_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${WHATSAPP_REGISTRATION_PATH}"
+            s6-setuidgid matrix python3 -m mautrix_whatsapp \
+                                                        -g \
+                                                        -c "${WHATSAPP_CONFIG_PATH}"/${WHATSAPP_CONFIG_FILE} \
+                                                        -r "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" \
+                                                        || exit $?
+            print_notice "[configure_whatsapp] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
     fi
 }
