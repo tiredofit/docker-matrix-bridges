@@ -117,102 +117,108 @@ Be sure to view the following repositories to understand all the customizable op
 
 #### Facebook
 
-| Variable                                                           | Description | Default                                      |
-| ------------------------------------------------------------------ | ----------- | -------------------------------------------- |
-| `FACEBOOK_ALLOW_INVITES`                                           |             | `FALSE`                                      |
-| `FACEBOOK_ALLOW_MATRIX_LOGIN`                                      |             | `TRUE`                                       |
-| `FACEBOOK_APPSERVER_ADDRESS`                                       |             | `http://localhost:${FACEBOOK_LISTEN_PORT}`   |
-| `FACEBOOK_APPSERVICE_ID`                                           |             | `facebook`                                   |
-| `FACEBOOK_BACKFILL_ENABLE`                                         |             | `TRUE`                                       |
-| `FACEBOOK_BACKFILL_ENABLE_MSC2716`                                 |             | `FALSE`                                      |
-| `FACEBOOK_BACKFILL_MAX_CONVERSATIONS`                              |             | `20`                                         |
-| `FACEBOOK_BACKFILL_SYNC_THREAD_DELAY`                              |             | `5`                                          |
-| `FACEBOOK_BACKFILL_UNREAD_HOURS_THRESHOLD`                         |             | `0`                                          |
-| `FACEBOOK_BOT_AVATAR`                                              |             | `mxc://maunium.net/ygtkteZsXnGJLJHRchUwYWak` |
-| `FACEBOOK_BOT_DISPLAYNAME`                                         |             | `Facebook bridge bot`                        |
-| `FACEBOOK_BOT_USERNAME`                                            |             | `facebookbot`                                |
-| `FACEBOOK_BRIDGE_PRESENCE`                                         |             | `FALSE`                                      |
-| `FACEBOOK_COMMAND_PREFIX`                                          |             | `!fb`                                        |
-| `FACEBOOK_CONFIG_FILE`                                             |             | `facebook.yaml`                              |
-| `FACEBOOK_CONFIG_PATH`                                             |             | `${CONFIG_PATH}`                             |
-| `FACEBOOK_DATA_PATH`                                               |             | `${DATA_PATH}/facebook/`                     |
-| `FACEBOOK_DB_MAX_SIZE`                                             |             | `10`                                         |
-| `FACEBOOK_DB_MIN_SIZE`                                             |             | `1`                                          |
-| `FACEBOOK_DB_PORT`                                                 |             | `5432`                                       |
-| `FACEBOOK_DB_SQLITE_FILE`                                          |             | `facebook.db`                                |
-| `FACEBOOK_DB_SQLITE_PATH`                                          |             | `${DB_SQLITE_PATH}`                          |
-| `FACEBOOK_DB_TYPE`                                                 | `POSTGRESQL` `SQLITE`            | `SQLITE`                                     |
-| `FACEBOOK_DISABLE_BRIDGE_NOTICES=$FACEBOOK_DISABLE_BRIDGE_NOTICES` |             | `FALSE`                                      |
-| `FACEBOOK_ENABLE_DELIVERY_ERROR_REPORTS`                           |             | `TRUE`                                       |
-| `FACEBOOK_ENABLE_DELIVERY_RECEIPTS`                                |             | `FALSE`                                      |
-| `FACEBOOK_ENABLE_EPHEMERAL_EVENTS`                                 |             | `TRUE`                                       |
-| `FACEBOOK_ENABLE_MANHOLE`                                          |             | `FALSE`                                      |
-| `FACEBOOK_ENABLE_MESSAGE_STATUS_EVENTS`                            |             | `FALSE`                                      |
-| `FACEBOOK_ENABLE_METRICS`                                          |             | `FALSE`                                      |
-| `FACEBOOK_ENABLE_PUBLIC`                                           |             | `FALSE`                                      |
-| `FACEBOOK_ENCRYPTION_ALLOW`                                        |             | `FALSE`                                      |
-| `FACEBOOK_ENCRYPTION_ALLOW_KEY_SHARING`                            |             | `FALSE`                                      |
-| `FACEBOOK_ENCRYPTION_APPSERVICE`                                   |             | `FALSE`                                      |
-| `FACEBOOK_ENCRYPTION_DEFAULT`                                      |             | `FALSE`                                      |
-| `FACEBOOK_ENCRYPTION_REQUIRE`                                      |             | `FALSE`                                      |
-| `FACEBOOK_ENCRYPTION_ROTATION_ENABLE_CUSTOM`                       |             | `FALSE`                                      |
-| `FACEBOOK_ENCRYPTION_ROTATION_MESSAGES`                            |             | `100`                                        |
-| `FACEBOOK_ENCRYPTION_ROTATION_MILLISECONDS`                        |             | `604800000`                                  |
-| `FACEBOOK_ENCRYPTION_VERIFY_LEVELS_RECEIVE`                        |             | `unverified`                                 |
-| `FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SEND`                           |             | `unverified`                                 |
-| `FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SHARE`                          |             | `cross-signed-tofu`                          |
-| `FACEBOOK_FEDERATE_ROOMS`                                          |             | `TRUE`                                       |
-| `FACEBOOK_GET_PROXY_API_URL`                                       |             | `null`                                       |
-| `FACEBOOK_HOMESERVER_ADDRESS`                                      |             | `${HOMESERVER_ADDRESS}`                      |
-| `FACEBOOK_HOMESERVER_DOMAIN`                                       |             | `${HOMESERVER_DOMAIN}`                       |
-| `FACEBOOK_HOMESERVER_ENABLE_ASYNC_UPLOADS`                         |             | `${HOMESERVER_ENABLE_ASYNC_UPLOADS}`         |
-| `FACEBOOK_HOMESERVER_HTTP_RETRY_COUNT`                             |             | `${HOMESERVER_HTTP_RETRY_COUNT}`             |
-| `FACEBOOK_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT`             |             | `null`                                       |
-| `FACEBOOK_HOMESERVER_SOFTWARE`                                     |             | `${HOMESERVER_SOFTWARE}`                     |
-| `FACEBOOK_HOMESERVER_STATUS_ENDPOINT`                              |             | `null`                                       |
-| `FACEBOOK_HOMESERVER_TLS_VERIFY`                                   |             | `${HOMESERVER_TLS_VERIFY}`                   |
-| `FACEBOOK_INVITE_OWN_PUPPET_TO_PM`                                 |             | `FALSE`                                      |
-| `FACEBOOK_LISTEN_IP`                                               |             | `0.0.0.0`                                    |
-| `FACEBOOK_LISTEN_PORT`                                             |             | `29319`                                      |
-| `FACEBOOK_LOG_FILE`                                                |             | `facebook.log`                               |
-| `FACEBOOK_LOG_LEVEL`                                               |             | `${LOG_LEVEL}`                               |
-| `FACEBOOK_LOG_LEVEL_AIOHTTP`                                       |             | `${FACEBOOK_LOG_LEVEL}`                      |
-| `FACEBOOK_LOG_LEVEL_MAU`                                           |             | `${FACEBOOK_LOG_LEVEL}`                      |
-| `FACEBOOK_LOG_LEVEL_MAUFBAPI`                                      |             | `${FACEBOOK_LOG_LEVEL}`                      |
-| `FACEBOOK_LOG_LEVEL_PAHO`                                          |             | `${FACEBOOK_LOG_LEVEL}`                      |
-| `FACEBOOK_LOG_PATH`                                                |             | `${LOG_PATH}`                                |
-| `FACEBOOK_LOG_TYPE`                                                |             | `${LOG_TYPE}`                                |
-| `FACEBOOK_MANHOLE_SOCKET`                                          |             | `/var/tmp/manhole_bridge_facebook.socket`    |
-| `FACEBOOK_MANHOLE_WHITELIST`                                       |             | `0`                                          |
-| `FACEBOOK_MAX_BODY_SIZE`                                           |             | `1`                                          |
-| `FACEBOOK_METRICS_LISTEN_PORT`                                     |             | `3200`                                       |
-| `FACEBOOK_MUTE_BRIDGING`                                           |             | `FALSE`                                      |
-| `FACEBOOK_PERIODIC_RECONNECT_ALWAYS`                               |             | `FALSE`                                      |
-| `FACEBOOK_PERIODIC_RECONNECT_INTERVAL`                             |             | `-1`                                         |
-| `FACEBOOK_PERIODIC_RECONNECT_MIN_CONNECTED_TIME`                   |             | `0`                                          |
-| `FACEBOOK_PERIODIC_RECONNECT_MODE`                                 |             | `refresh`                                    |
-| `FACEBOOK_PERMISSIONS_ADMIN`                                       |             | `@admin:example.com`                         |
-| `FACEBOOK_PERMISSIONS_RELAY`                                       |             | `*`                                          |
-| `FACEBOOK_PERMISSIONS_USER`                                        |             | `example.com`                                |
-| `FACEBOOK_PUBLIC_EXTERNAL_URL`                                     |             | `https://example.com/public`                 |
-| `FACEBOOK_PUBLIC_PREFIX`                                           |             | `/public`                                    |
-| `FACEBOOK_PUBLIC_SHARED_SECRET`                                    |             | `generate`                                   |
-| `FACEBOOK_RECONNECTION_FAIL_ACTION`                                |             | `reconnect`                                  |
-| `FACEBOOK_RECONNECTION_WAIT`                                       |             | `0`                                          |
-| `FACEBOOK_REGENERATE_REGISTRATION`                                 |             | `FALSE`                                      |
-| `FACEBOOK_REGISTRATION_FILE`                                       |             | `facebook-registration.yaml`                 |
-| `FACEBOOK_REGISTRATION_PATH`                                       |             | `${REGISTRATION_PATH}`                       |
-| `FACEBOOK_RESEND_BRIDGE_INFO`                                      |             | `FALSE`                                      |
-| `FACEBOOK_RESYNC_MAX_DISCONNECTED_TIME`                            |             | `5`                                          |
-| `FACEBOOK_SEGMENT_API_KEY`                                         |             | `null`                                       |
-| `FACEBOOK_SYNC_DIRECT_CHAT_LIST`                                   |             | `FALSE`                                      |
-| `FACEBOOK_SYNC_ON_STARTUP`                                         |             | `TRUE`                                       |
-| `FACEBOOK_SYNC_UPDATE_AVATAR`                                      |             | `TRUE`                                       |
-| `FACEBOOK_TAG_ONLY_ON_CREATE`                                      |             | `TRUE`                                       |
-| `FACEBOOK_TEMPLATE_DISPLAYNAME`                                    |             | `{displayname} (FB)`                         |
-| `FACEBOOK_TEMPLATE_DISPLAYNAME_PREFERENCE`                         |             | `name,first_name`                            |
-| `FACEBOOK_TEMPLATE_USERNAME`                                       |             | `facebook_{userid}`                          |
-| `FACEBOOK_TEMPORARY_DISCONNECT_NOTICES`                            |             | `FALSE`                                      |
+| Variable                                               | Description           | Default                                      |
+| ------------------------------------------------------ | --------------------- | -------------------------------------------- |
+| `FACEBOOK_ALLOW_INVITES`                               |                       | `FALSE`                                      |
+| `FACEBOOK_ALLOW_MATRIX_LOGIN`                          |                       | `TRUE`                                       |
+| `FACEBOOK_APPSERVER_ADDRESS`                           |                       | `http://localhost:${FACEBOOK_LISTEN_PORT}`   |
+| `FACEBOOK_APPSERVICE_ID`                               |                       | `facebook`                                   |
+| `FACEBOOK_BACKFILL_ENABLE`                             |                       | `TRUE`                                       |
+| `FACEBOOK_BACKFILL_ENABLE_MSC2716`                     |                       | `FALSE`                                      |
+| `FACEBOOK_BACKFILL_MAX_CONVERSATIONS`                  |                       | `20`                                         |
+| `FACEBOOK_BACKFILL_SYNC_THREAD_DELAY`                  |                       | `5`                                          |
+| `FACEBOOK_BACKFILL_UNREAD_HOURS_THRESHOLD`             |                       | `0`                                          |
+| `FACEBOOK_BOT_AVATAR`                                  |                       | `mxc://maunium.net/ygtkteZsXnGJLJHRchUwYWak` |
+| `FACEBOOK_BOT_DISPLAYNAME`                             |                       | `Facebook bridge bot`                        |
+| `FACEBOOK_BOT_USERNAME`                                |                       | `facebookbot`                                |
+| `FACEBOOK_BRIDGE_PRESENCE`                             |                       | `FALSE`                                      |
+| `FACEBOOK_COMMAND_PREFIX`                              |                       | `!fb`                                        |
+| `FACEBOOK_CONFIG_FILE`                                 |                       | `facebook.yaml`                              |
+| `FACEBOOK_CONFIG_PATH`                                 |                       | `${CONFIG_PATH}`                             |
+| `FACEBOOK_DATA_PATH`                                   |                       | `${DATA_PATH}/facebook/`                     |
+| `FACEBOOK_DB_MAX_SIZE`                                 |                       | `10`                                         |
+| `FACEBOOK_DB_MIN_SIZE`                                 |                       | `1`                                          |
+| `FACEBOOK_DB_PORT`                                     |                       | `5432`                                       |
+| `FACEBOOK_DB_SQLITE_FILE`                              |                       | `facebook.db`                                |
+| `FACEBOOK_DB_SQLITE_PATH`                              |                       | `${DB_SQLITE_PATH}`                          |
+| `FACEBOOK_DB_TYPE`                                     | `POSTGRESQL` `SQLITE` | `SQLITE`                                     |
+| `FACEBOOK_DISABLE_BRIDGE_NOTICES                       |                       | `FALSE`                                      |
+| `FACEBOOK_ENABLE_DELIVERY_ERROR_REPORTS`               |                       | `TRUE`                                       |
+| `FACEBOOK_ENABLE_DELIVERY_RECEIPTS`                    |                       | `FALSE`                                      |
+| `FACEBOOK_ENABLE_EPHEMERAL_EVENTS`                     |                       | `TRUE`                                       |
+| `FACEBOOK_ENABLE_MANHOLE`                              |                       | `FALSE`                                      |
+| `FACEBOOK_ENABLE_MESSAGE_STATUS_EVENTS`                |                       | `FALSE`                                      |
+| `FACEBOOK_ENABLE_METRICS`                              |                       | `FALSE`                                      |
+| `FACEBOOK_ENABLE_PUBLIC`                               |                       | `FALSE`                                      |
+| `FACEBOOK_ENCRYPTION_ALLOW`                            |                       | `FALSE`                                      |
+| `FACEBOOK_ENCRYPTION_ALLOW_KEY_SHARING`                |                       | `FALSE`                                      |
+| `FACEBOOK_ENCRYPTION_APPSERVICE`                       |                       | `FALSE`                                      |
+| `FACEBOOK_ENCRYPTION_DEFAULT`                          |                       | `FALSE`                                      |
+| `FACEBOOK_ENCRYPTION_REQUIRE`                          |                       | `FALSE`                                      |
+| `FACEBOOK_ENCRYPTION_ROTATION_ENABLE_CUSTOM`           |                       | `FALSE`                                      |
+| `FACEBOOK_ENCRYPTION_ROTATION_MESSAGES`                |                       | `100`                                        |
+| `FACEBOOK_ENCRYPTION_ROTATION_MILLISECONDS`            |                       | `604800000`                                  |
+| `FACEBOOK_ENCRYPTION_VERIFY_LEVELS_RECEIVE`            |                       | `unverified`                                 |
+| `FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SEND`               |                       | `unverified`                                 |
+| `FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SHARE`              |                       | `cross-signed-tofu`                          |
+| `FACEBOOK_FEDERATE_ROOMS`                              |                       | `TRUE`                                       |
+| `FACEBOOK_GET_PROXY_API_URL`                           |                       | `null`                                       |
+| `FACEBOOK_HOMESERVER_ADDRESS`                          |                       | `${HOMESERVER_ADDRESS}`                      |
+| `FACEBOOK_HOMESERVER_DOMAIN`                           |                       | `${HOMESERVER_DOMAIN}`                       |
+| `FACEBOOK_HOMESERVER_ENABLE_ASYNC_UPLOADS`             |                       | `${HOMESERVER_ENABLE_ASYNC_UPLOADS}`         |
+| `FACEBOOK_HOMESERVER_HTTP_RETRY_COUNT`                 |                       | `${HOMESERVER_HTTP_RETRY_COUNT}`             |
+| `FACEBOOK_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT` |                       | `null`                                       |
+| `FACEBOOK_HOMESERVER_SOFTWARE`                         |                       | `${HOMESERVER_SOFTWARE}`                     |
+| `FACEBOOK_HOMESERVER_STATUS_ENDPOINT`                  |                       | `null`                                       |
+| `FACEBOOK_HOMESERVER_TLS_VERIFY`                       |                       | `${HOMESERVER_TLS_VERIFY}`                   |
+| `FACEBOOK_INVITE_OWN_PUPPET_TO_PM`                     |                       | `FALSE`                                      |
+| `FACEBOOK_LISTEN_IP`                                   |                       | `0.0.0.0`                                    |
+| `FACEBOOK_LISTEN_PORT`                                 |                       | `29319`                                      |
+| `FACEBOOK_LOG_FILE`                                    |                       | `facebook.log`                               |
+| `FACEBOOK_LOG_LEVEL`                                   |                       | `${LOG_LEVEL}`                               |
+| `FACEBOOK_LOG_LEVEL_AIOHTTP`                           |                       | `${FACEBOOK_LOG_LEVEL}`                      |
+| `FACEBOOK_LOG_LEVEL_MAU`                               |                       | `${FACEBOOK_LOG_LEVEL}`                      |
+| `FACEBOOK_LOG_LEVEL_MAUFBAPI`                          |                       | `${FACEBOOK_LOG_LEVEL}`                      |
+| `FACEBOOK_LOG_LEVEL_PAHO`                              |                       | `${FACEBOOK_LOG_LEVEL}`                      |
+| `FACEBOOK_LOG_PATH`                                    |                       | `${LOG_PATH}`                                |
+| `FACEBOOK_LOG_TYPE`                                    |                       | `${LOG_TYPE}`                                |
+| `FACEBOOK_MANHOLE_SOCKET`                              |                       | `/var/tmp/manhole_bridge_facebook.socket`    |
+| `FACEBOOK_MANHOLE_WHITELIST`                           |                       | `0`                                          |
+| `FACEBOOK_MAX_BODY_SIZE`                               |                       | `1`                                          |
+| `FACEBOOK_METRICS_LISTEN_PORT`                         |                       | `3200`                                       |
+| `FACEBOOK_MUTE_BRIDGING`                               |                       | `FALSE`                                      |
+| `FACEBOOK_PERIODIC_RECONNECT_ALWAYS`                   |                       | `FALSE`                                      |
+| `FACEBOOK_PERIODIC_RECONNECT_INTERVAL`                 |                       | `-1`                                         |
+| `FACEBOOK_PERIODIC_RECONNECT_MIN_CONNECTED_TIME`       |                       | `0`                                          |
+| `FACEBOOK_PERIODIC_RECONNECT_MODE`                     |                       | `refresh`                                    |
+| `FACEBOOK_PERMISSIONS_ADMIN`                           |                       | `@admin:example.com`                         |
+| `FACEBOOK_PERMISSIONS_RELAY`                           |                       | `*`                                          |
+| `FACEBOOK_PERMISSIONS_USER`                            |                       | `example.com`                                |
+| `FACEBOOK_PUBLIC_EXTERNAL_URL`                         |                       | `https://example.com/public`                 |
+| `FACEBOOK_PUBLIC_PREFIX`                               |                       | `/public`                                    |
+| `FACEBOOK_PUBLIC_SHARED_SECRET`                        |                       | `generate`                                   |
+| `FACEBOOK_RECONNECTION_FAIL_ACTION`                    |                       | `reconnect`                                  |
+| `FACEBOOK_RECONNECTION_FAIL_WAIT`                      |                       | `0`                                          |
+| `FACEBOOK_REGENERATE_REGISTRATION`                     |                       | `FALSE`                                      |
+| `FACEBOOK_REGISTRATION_FILE`                           |                       | `facebook-registration.yaml`                 |
+| `FACEBOOK_REGISTRATION_PATH`                           |                       | `${REGISTRATION_PATH}`                       |
+| `FACEBOOK_RESEND_BRIDGE_INFO`                          |                       | `FALSE`                                      |
+| `FACEBOOK_RESYNC_MAX_DISCONNECTED_TIME`                |                       | `5`                                          |
+| `FACEBOOK_SANDBOX_MEDIA_DOWNLOAD`                      |                       | `FALSE`                                      |
+| `FACEBOOK_SEGMENT_API_KEY`                             |                       | `null`                                       |
+| `FACEBOOK_SYNC_DIRECT_CHAT_LIST`                       |                       | `FALSE`                                      |
+| `FACEBOOK_SYNC_ON_STARTUP`                             |                       | `TRUE`                                       |
+| `FACEBOOK_SYNC_UPDATE_AVATAR`                          |                       | `TRUE`                                       |
+| `FACEBOOK_TAG_ONLY_ON_CREATE`                          |                       | `TRUE`                                       |
+| `FACEBOOK_TEMPLATE_DISPLAYNAME`                        |                       | `{displayname} (FB)`                         |
+| `FACEBOOK_TEMPLATE_DISPLAYNAME_PREFERENCE`             |                       | `name,first_name`                            |
+| `FACEBOOK_TEMPLATE_USERNAME`                           |                       | `facebook_{userid}`                          |
+| `FACEBOOK_TEMPORARY_DISCONNECT_NOTICES`                |                       | `FALSE`                                      |
+
+# Whatsapp
+
+| Variable | Description | Default |
+| -------- | ----------- | ------- |
 
 
 ### Networking
@@ -221,7 +227,8 @@ Be sure to view the following repositories to understand all the customizable op
 | ----- | -------- | ---------------- |
 | 29319 | tcp      | Facebook Bridge  |
 | 3200  | tcp      | Facebook Metrics |
-
+| 29318 | tcp      | Whatsapp Bridge  |
+| 9200  | tcp      | Whatsapp Metrics |
 
 ## Maintenance
 ### Shell Access

@@ -1,27 +1,26 @@
 #!/command/with-contenv bash
 
 bootstrap_filesystem() {
-    if [ -d "${CONFIG_PATH}" ] ; then
+    if [ ! -d "${CONFIG_PATH}" ] ; then
         mkdir -p "${CONFIG_PATH}"
     fi
     if [ $(stat -c %U "${CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${CONFIG_PATH}" ; fi
 
-    if [ -d "${DATA_PATH}" ] ; then
+    if [ ! -d "${DATA_PATH}" ] ; then
         mkdir -p "${DATA_PATH}"
     fi
     if [ $(stat -c %U "${DATA_PATH}") != "matrix" ] ; then chown matrix:matrix "${DATA_PATH}" ; fi
 
-    if [ -d "${LOG_PATH}" ] ; then
+    if [ ! -d "${LOG_PATH}" ] ; then
         mkdir -p "${LOG_PATH}"
     fi
     if [ $(stat -c %U "${LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${LOG_PATH}" ; fi
     create_logrotate matrix_bridges "${LOG_PATH}"/*.log matrix matrix
 
-    if [ -d "${REGISTRATION_PATH}" ] ; then
+    if [ ! -d "${REGISTRATION_PATH}" ] ; then
         mkdir -p "${REGISTRATION_PATH}"
     fi
     if [ $(stat -c %U "${REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${REGISTRATION_PATH}" ; fi
-
 }
 
 configure_discord() {
@@ -181,10 +180,9 @@ configure_facebook() {
                                         .manhole.path = env(FACEBOOK_MANHOLE_SOCKET) |
                                         .manhole.whitelist = [ "'$(echo ${FACEBOOK_MANHOLE_WHITELIST//,/\",\"})'" ]
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
-# Whitelist     - '0'
         s6-setuidgid matrix yq -i    '
                                         .bridge.username_template = strenv(FACEBOOK_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = "'$(echo ${FACEBOOK_TEMPLATE_DISPLAYNAME})'" |
+                                        .bridge.displayname_template = strenv(FACEBOOK_TEMPLATE_DISPLAYNAME) |
                                         .bridge.displayname_preference = [ "'$(echo ${FACEBOOK_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
                                         .bridge.command_prefix = "'$(echo ${FACEBOOK_COMMAND_PREFIX})'" |
                                         .bridge.invite_own_puppet_to_pm = env(FACEBOOK_INVITE_OWN_PUPPET_TO_PM) |
@@ -210,12 +208,12 @@ configure_facebook() {
                                         .bridge.temporary_disconnect_notices = env(FACEBOOK_TEMPORARY_DISCONNECT_NOTICES) |
                                         .bridge.on_reconnection_fail.action = env(FACEBOOK_RECONNECTION_FAIL_ACTION) |
                                         .bridge.on_reconnection_fail.wait_for = env(FACEBOOK_RECONNECTION_FAIL_WAIT) |
-                                        .bridge.disable_bridge_notices = env(FACEBOOK_BRIDGE_NOTICES) |
+                                        .bridge.disable_bridge_notices = env(FACEBOOK_DISABLE_BRIDGE_NOTICES) |
                                         .bridge.resend_bridge_info = env(FACEBOOK_RESEND_BRIDGE_INFO) |
                                         .bridge.mute_bridging = env(FACEBOOK_MUTE_BRIDGING) |
                                         .bridge.tag_only_on_create = env(FACEBOOK_TAG_ONLY_ON_CREATE) |
                                         .bridge.sandbox_media_download = env(FACEBOOK_SANDBOX_MEDIA_DOWNLOAD) |
-                                        .bridge.get_proxy_api_url = = env(FACEBOOK_GET_PROXY_API_URL) |
+                                        .bridge.get_proxy_api_url = env(FACEBOOK_GET_PROXY_API_URL) |
                                         .bridge.encryption.allow = env(FACEBOOK_ENCRYPTION_ALLOW) |
                                         .bridge.encryption.default = env(FACEBOOK_ENCRYPTION_DEFAULT) |
                                         .bridge.encryption.appservice = env(FACEBOOK_ENCRYPTION_APPSERVICE) |
@@ -228,13 +226,6 @@ configure_facebook() {
                                         .bridge.encryption.rotation.milliseconds = env(FACEBOOK_ENCRYPTION_ROTATION_MILLISECONDS) |
                                         .bridge.encryption.rotation.messages = env(FACEBOOK_ENCRYPTION_ROTATION_MESSAGES)
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
-
-
-
-
-
-
-
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
         set -f
@@ -371,8 +362,6 @@ configure_instagram() {
             sudo matrix cp -R /assets/config/instagram/example.config.yml "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
         fi
 
-
-
 #        if [[ "$(yq e '.logging.handlers.file.filename' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}")" == "./mautrix-instagram.log" ]]; then
 #            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
 #            yq -I4 e -i 'del(.logging.handlers.file)' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
@@ -484,6 +473,7 @@ configure_whatsapp() {
         source /assets/defaults/bridge_whatsapp
         set +a
         print_debug "[configure_whatsapp]"
+
         if [ ! -d "${WHATSAPP_CONFIG_PATH}" ] ; then
             mkdir -p "${WHATSAPP_CONFIG_PATH}"
         fi
@@ -512,9 +502,13 @@ configure_whatsapp() {
                     (( counter+=5 ))
                     print_warn "Postgres Host '${WHATSAPP_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
                 done
+                if var_true "${WHATSAPP_DB_ENABLE_TLS}" ; then
+                    whatsapp_db_tls="?sslmode=enable"
+                else
+                    whatsapp_db_tls="?sslmode=disable"
+                fi
                 export WHATSAPP_DB_TYPE=postgres
-                export WHATSAPP_DB_STRING=${WHATSAPP_DB_STRING:-"postgres://${WHATSAPP_DB_USER}:${WHATSAPP_DB_PASS}@${WHATSAPP_DB_HOST}:${WHATSAPP_DB_PORT}/${WHATSAPP_DB_NAME}"}
-            set +x
+                export WHATSAPP_DB_STRING=${WHATSAPP_DB_STRING:-"postgres://${WHATSAPP_DB_USER}:${WHATSAPP_DB_PASS}@${WHATSAPP_DB_HOST}:${WHATSAPP_DB_PORT}/${WHATSAPP_DB_NAME}${whatsapp_db_tls}"}
             ;;
             sqlite* )
                 if [ ! -d "${WHATSAPP_DB_SQLITE_PATH}" ] ; then
@@ -590,7 +584,6 @@ configure_whatsapp() {
                                         ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
         fi
 
-
         s6-setuidgid matrix yq -i    '
                                         .metrics.enabled = env(WHATSAPP_ENABLE_METRICS) |
                                         .metrics.listen = "'$(echo ${WHATSAPP_METRICS_LISTEN_IP}:${WHATSAPP_METRICS_LISTEN_PORT})'"
@@ -606,25 +599,8 @@ configure_whatsapp() {
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
         s6-setuidgid matrix yq -i    '
-                                        .manhole.enabled = env(WHATSAPP_ENABLE_MANHOLE) |
-                                        .manhole.path = env(WHATSAPP_MANHOLE_SOCKET) |
-                                        .manhole.whitelist = [ "'$(echo ${WHATSAPP_MANHOLE_WHITELIST//,/\",\"})'" ]
-                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-
-
-
-        s6-setuidgid matrix yq -i    '
-                                        .appservice.public.enabled = env(WHATSAPP_ENABLE_PUBLIC) |
-                                        .appservice.public.prefix = env(WHATSAPP_PUBLIC_PREFIX) |
-                                        .appservice.public.external = env(WHATSAPP_PUBLIC_EXTERNAL_URL) |
-                                        .appservice.public.shared_secret = env(WHATSAPP_PUBLIC_SHARED_SECRET) |
-                                        .appservice.public.allow_matrix_login = env(WHATSAPP_ALLOW_MATRIX_LOGIN) |
-                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-
-# Whitelist     - '0'
-        s6-setuidgid matrix yq -i    '
                                         .bridge.username_template = strenv(WHATSAPP_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = "'$(echo ${WHATSAPP_TEMPLATE_DISPLAYNAME})'" |
+                                        .bridge.displayname_template = strenv(WHATSAPP_TEMPLATE_DISPLAYNAME) |
                                         .bridge.personal_filtering_spaces = env(WHATSAPP_PERSONAL_FILTERING_SPACES) |
                                         .bridge.delivery_receipts = env(WHATSAPP_ENABLE_DELIVERY_RECEIPTS) |
                                         .bridge.message_status_events = env(WHATSAPP_ENABLE_MESSAGE_STATUS_EVENTS) |
@@ -632,16 +608,6 @@ configure_whatsapp() {
                                         .bridge.call_start_notices = env(WHATSAPP_ENABLE_CALL_START_NOTICES) |
                                         .bridge.identity_change_notices = env(WHATSAPP_ENABLE_IDENTITY_CHANGE_NOTICES) |
                                         .bridge.portal_message_buffer = env(WHATSAPP_PORTAL_MESSAGE_BUFFER) |
-                                        .bridge. = env(WHATSAPP_) |
-
-
-                                        .bridge.invite_own_puppet_to_pm = env(WHATSAPP_INVITE_OWN_PUPPET_TO_PM) |
-                                        .bridge.sync_direct_chat_list = env(WHATSAPP_SYNC_DIRECT_CHAT_LIST) |
-                                        .bridge.presence_from_facebook = env(WHATSAPP_BRIDGE_PRESENCE) |
-                                        .bridge.update_avatar_initial_sync = env(WHATSAPP_SYNC_UPDATE_AVATAR) |
-                                        .bridge.delivery_receipts = env(WHATSAPP_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.delivery_error_reports = env(WHATSAPP_ENABLE_DELIVERY_ERROR_REPORTS) |
-                                        .bridge.message_status_events = env(WHATSAPP_ENABLE_MESSAGE_STATUS_EVENTS) |
                                         .bridge.federate_rooms = env(WHATSAPP_FEDERATE_ROOMS) |
                                         .bridge.command_prefix = "'$(echo ${WHATSAPP_COMMAND_PREFIX})'" |
                                         .bridge.encryption.allow = env(WHATSAPP_ENCRYPTION_ALLOW) |
@@ -657,7 +623,6 @@ configure_whatsapp() {
                                         .bridge.encryption.rotation.messages = env(WHATSAPP_ENCRYPTION_ROTATION_MESSAGES)
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
-
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
         set -f
 
@@ -670,7 +635,7 @@ configure_whatsapp() {
                     export WARELAY=$warelay
                 fi
                 s6-setuidgid matrix yq -i    '
-                                            .bridge.permissions.[  "'$(echo ${WARELAY})'" ]+= "relay"
+                                            .bridge.permissions.[ "'$(echo ${WARELAY})'" ]+= "relay"
                                         ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
             done
         fi
@@ -714,8 +679,7 @@ configure_whatsapp() {
             ;;
             "console" )
                 export WHATSAPP_LOG_TYPE="console"
-                export WHATSAPP_LOG_FILE=""
-
+                export WHATSAPP_LOG_FILE="null"
             ;;
             "file" )
                 create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" matrix matrix bridge_whatsapp
@@ -723,11 +687,12 @@ configure_whatsapp() {
             ;;
         esac
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .logging.directory = "'$(echo "${WHATSAPP_LOG_PATH}")'" |
                                         .logging.file_name_format = env(WHATSAPP_LOG_FILE) |
                                         .logging.print_level = env(WHATSAPP_LOG_LEVEL) |
-                                        .logging.root.handlers = [ "'$(echo "${WHATSAPP_LOG_TYPE,,//,/\",\"}")'" ]
+                                        .logging.root.handlers = [ "'$(echo "${WHATSAPP_LOG_TYPE,,//,/\",\"}")'" ] |
+                                        .logging.timestamp_format = "2006-01-02 15:04:05"
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
         create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" matrix matrix bridge_whatsapp
@@ -745,11 +710,11 @@ configure_whatsapp() {
 
         if var_true "${wa_generate_registration}" ; then
             s6-setuidgid matrix mkdir -p "${WHATSAPP_REGISTRATION_PATH}"
-            s6-setuidgid matrix python3 -m mautrix_whatsapp \
-                                                        -g \
-                                                        -c "${WHATSAPP_CONFIG_PATH}"/${WHATSAPP_CONFIG_FILE} \
-                                                        -r "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" \
-                                                        || exit $?
+            silent s6-setuidgid matrix mautrix-whatsapp \
+                                                    -g \
+                                                    -c "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}" \
+                                                    -r "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" \
+                                                    || exit $?
             print_notice "[configure_whatsapp] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
     fi

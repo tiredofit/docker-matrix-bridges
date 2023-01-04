@@ -133,7 +133,7 @@ RUN source assets/functions/00-container && \
                     py3-olm \
                     py3-paho-mqtt \
                     py3-pillow \
-                    #py3-prometheus-client \
+                    py3-prometheus-client \
                     py3-pycryptodome \
                     py3-pysocks \
                     py3-ruamel.yaml \
@@ -191,7 +191,6 @@ RUN source assets/functions/00-container && \
     package install .telegram-run-deps \
                     #imageio
                     #py3-proglog \
-                    #py3-prometheus-client \ (pulls in twisted unnecessarily)
                     #py3-telethon \ (outdated)
                     ffmpeg \
                     py3-aiohttp \
@@ -233,7 +232,7 @@ RUN source assets/functions/00-container && \
                     py3-magic \
                     py3-ruamel.yaml \
                     py3-commonmark \
-                    #py3-prometheus-client \
+                    py3-prometheus-client \
                     py3-olm \
                     py3-cffi \
                     py3-pycryptodome \
