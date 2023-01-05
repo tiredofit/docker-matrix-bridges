@@ -25,28 +25,253 @@ bootstrap_filesystem() {
 
 configure_discord() {
     if [ "${SETUP_TYPE,,}" = "auto" ] ; then
-        if [ -f "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}" ]; then
-            sudo matrix cp -R /assets/config/facebook/example.config.yml "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+        set -a
+        source /assets/defaults/bridge_discord
+        set +a
+        print_debug "[configure_discord]"
+
+        if [ ! -d "${DISCORD_CONFIG_PATH}" ] ; then
+            mkdir -p "${DISCORD_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${DISCORD_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${DISCORD_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${DISCORD_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${DISCORD_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${DISCORD_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${DISCORD_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${DISCORD_LOG_PATH}" ] ; then
+            mkdir -p "${DISCORD_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${DISCORD_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${DISCORD_LOG_PATH}" ; fi
+
+        case "${DISCORD_DB_TYPE,,}" in
+            postgres* )
+                sanity_var DISCORD_DB_USER "DB Username for Discord"
+                sanity_var DISCORD_DB_PASS "DB Password for Discord"
+                sanity_var DISCORD_DB_HOST "DB Host for Discord"
+                sanity_var DISCORD_DB_NAME "DB Name for Discord"
+                counter=0
+                export PGPASSWORD=${DISCORD_DB_PASS}
+                until pg_isready --dbname="${DISCORD_DB_NAME}" --host="${DISCORD_DB_HOST}" --port="${DISCORD_DB_PORT}" --username="${DISCORD_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${DISCORD_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                if var_true "${DISCORD_DB_ENABLE_TLS}" ; then
+                    discord_db_tls="?sslmode=enable"
+                else
+                    discord_db_tls="?sslmode=disable"
+                fi
+                export DISCORD_DB_TYPE=postgres
+                export DISCORD_DB_STRING=${DISCORD_DB_STRING:-"postgres://${DISCORD_DB_USER}:${DISCORD_DB_PASS}@${DISCORD_DB_HOST}:${DISCORD_DB_PORT}/${DISCORD_DB_NAME}${discord_db_tls}"}
+            ;;
+            sqlite* )
+                if [ ! -d "${DISCORD_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${DISCORD_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${DISCORD_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${DISCORD_DB_SQLITE_PATH}" ; fi
+                export DISCORD_DB_TYPE=sqlite-fk-wal
+                export DISCORD_DB_STRING=${DISCORD_DB_STRING:-"file://${DISCORD_DB_SQLITE_PATH}/${DISCORD_DB_SQLITE_FILE}?_txlock=immediate"}
+            ;;
+        esac
+
+        if [ ! -f "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/discord/example.config.yaml "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
         fi
 
-        # /opt/mautrix-discord is read-only, so disable file logging if it's pointing there.
-        #if [[ "$(yq e '.logging.directory' /data/config.yaml)" == "./logs" ]]; then
-        #    yq -I4 e -i '.logging.file_name_format = ""' /data/config.yaml
-        #fi
-        ## Do some config here
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(DISCORD_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(DISCORD_HOMESERVER_DOMAIN) |
+                                        .homeserver.software = env(DISCORD_HOMESERVER_SOFTWARE) |
+                                        .homeserver.status_endpoint = env(DISCORD_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(DISCORD_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(DISCORD_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
 
-        create_logrotate bridge_discord "${DISCORD_LOG_PATH}"/"${DISCORD_LOG_FILE}" matrix matrix
+        s6-setuidgid matrix yq -i    '
+                                        .appservice.address = env(DISCORD_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(DISCORD_LISTEN_IP) |
+                                        .appservice.port = env(DISCORD_LISTEN_PORT) |
+                                        .appservice.database.type = env(DISCORD_DB_TYPE) |
+                                        .appservice.database.uri = env(DISCORD_DB_STRING) |
+                                        .appservice.database.max_open_conns = env(DISCORD_DB_CONNECTIONS_MAX_OPEN) |
+                                        .appservice.database.max_idle_conns = env(DISCORD_DB_CONNECTIONS_MAX_IDLE) |
+                                        .appservice.database.max_conn_idle_time = env(DISCORD_DB_CONNECTIONS_MAX_IDLE_LIFETIME) |
+                                        .appservice.database.max_conn_lifetime = env(DISCORD_DB_CONNECTIONS_MAX_LIFETIME) |
+                                        .appservice.id = env(DISCORD_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(DISCORD_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(DISCORD_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(DISCORD_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(DISCORD_ENABLE_EPHEMERAL_EVENTS) |
+                                        .appservice.async_transactions = env(DISCORD_ENABLE_ASYNC_TRANSACTIONS)
+                                    ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
 
-        if [ ! -f "${DISCORD_DATA_PATH}"/"${DISCORD_REGISTRATION_FILE}" ]; then
-            s6-setuidgid matrix mkdir -p "${DISCORD_DATA_PATH}"
-            s6-setuidgid matrix /usr/bin/mautrix-discord \
+
+        if [ -f "${DISCORD_REGISTRATION_PATH}"/"${DISCORD_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}" && [ -z "${DISCORD_AS_TOKEN}" ] ; then
+            print_debug "[configure_discord] Setting as_token in configuration from previously generated registration file"
+            export TOI_DISCORD_AS_TOKEN=$(yq '.as_token' "${DISCORD_REGISTRATION_PATH}"/"${DISCORD_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_DISCORD_AS_TOKEN)
+                                        ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+            waastokenskip=true
+        elif [ -n "${DISCORD_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"; then
+            print_notice "You've supplied 'DISCORD_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${DISCORD_AS_TOKEN}" ] ; then
+            print_debug "[configure_discord] Updating DISCORD_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(DISCORD_AS_TOKEN)
+                                        ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+        fi
+
+        if [ -f "${DISCORD_REGISTRATION_PATH}"/"${DISCORD_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}" && [ -z "${DISCORD_HS_TOKEN}" ] ; then
+            print_debug "[configure_discord] Setting hs_token in configuration from previously generated registration file"
+            export TOI_DISCORD_HS_TOKEN=$(yq '.hs_token' "${DISCORD_REGISTRATION_PATH}"/"${DISCORD_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_DISCORD_HS_TOKEN)
+                                        ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+            wahstokenskip=true
+        elif [ -n "${DISCORD_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"; then
+            print_notice "You've supplied 'DISCORD_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${DISCORD_HS_TOKEN}" ] ; then
+            print_debug "[configure_discord] Updating DISCORD_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(DISCORD_HS_TOKEN)
+                                        ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .metrics.enabled = env(DISCORD_ENABLE_METRICS) |
+                                        .metrics.listen = "'$(echo ${DISCORD_METRICS_LISTEN_IP}:${DISCORD_METRICS_LISTEN_PORT})'"
+                                    ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .segment_key = env(DISCORD_SEGMENT_API_KEY)
+                                    ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+
+       s6-setuidgid matrix yq -i    '
+                                        .discord.os_name = env(DISCORD_OS_NAME) |
+                                        .discord.browser_name = env(DISCORD_BROWSER_NAME)
+                                    ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .bridge.username_template = strenv(DISCORD_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = strenv(DISCORD_TEMPLATE_DISPLAYNAME) |
+                                        .bridge.personal_filtering_spaces = env(DISCORD_PERSONAL_FILTERING_SPACES) |
+                                        .bridge.delivery_receipts = env(DISCORD_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.message_status_events = env(DISCORD_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.message_error_notices = env(DISCORD_ENABLE_MESSAGE_ERROR_NOTICES) |
+                                        .bridge.call_start_notices = env(DISCORD_ENABLE_CALL_START_NOTICES) |
+                                        .bridge.identity_change_notices = env(DISCORD_ENABLE_IDENTITY_CHANGE_NOTICES) |
+                                        .bridge.portal_message_buffer = env(DISCORD_PORTAL_MESSAGE_BUFFER) |
+                                        .bridge.federate_rooms = env(DISCORD_FEDERATE_ROOMS) |
+                                        .bridge.command_prefix = "'$(echo ${DISCORD_COMMAND_PREFIX})'" |
+                                        .bridge.encryption.allow = env(DISCORD_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(DISCORD_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(DISCORD_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(DISCORD_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(DISCORD_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(DISCORD_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(DISCORD_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(DISCORD_ENCRYPTION_ROTATION_MESSAGES)
+                                    ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${DISCORD_PERMISSIONS_RELAY}" ] ; then
+            discordrelays=$(echo "${DISCORD_PERMISSIONS_RELAY}" | tr "," "\n")
+            for discordrelay in $discordrelays; do
+                if [ "$discordrelay" = "*" ] ; then
+                    export DISCORDRELAY="PLACEHOLDERASTERISK"
+                else
+                    export DISCORDRELAY=$discordrelay
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${DISCORDRELAY})'" ]+= "relay"
+                                            ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${DISCORD_PERMISSIONS_ADMIN}" ] ; then
+            discordadmins=$(echo "${DISCORD_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for discordadmin in $discordadmins; do
+                if [ "$discordadmin" = "*" ] ; then
+                    export DISCORDADMIN="PLACEHOLDERASTERISK"
+                else
+                    export DISCORDADMIN=$discordadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${DISCORDADMIN})'" ] += "admin"
+                                            ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${DISCORD_PERMISSIONS_USER}" ] ; then
+            discordusers=$(echo "${DISCORD_PERMISSIONS_USER}" | tr "," "\n")
+            for discorduser in $discordusers; do
+                if [ "$discorduser" = "*" ] ; then
+                    export DISCORDUSER="PLACEHOLDERASTERISK"
+                else
+                    export DISCORDUSER=$discorduser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(DISCORDUSER)] += "user"
+                                            ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+        fi
+
+        case "${DISCORD_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_discord "${DISCORD_LOG_PATH}"/"${DISCORD_LOG_FILE}" matrix matrix bridge_discord
+                export DISCORD_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export DISCORD_LOG_TYPE="console"
+                export DISCORD_LOG_FILE="null"
+            ;;
+            "file" )
+                create_logrotate bridge_discord "${DISCORD_LOG_PATH}"/"${DISCORD_LOG_FILE}" matrix matrix bridge_discord
+                export DISCORD_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i   '
+                                        .logging.directory = "'$(echo "${DISCORD_LOG_PATH}")'" |
+                                        .logging.file_name_format = env(DISCORD_LOG_FILE) |
+                                        .logging.print_level = env(DISCORD_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${DISCORD_LOG_TYPE,,//,/\",\"}")'" ] |
+                                        .logging.timestamp_format = "2006-01-02 15:04:05"
+                                    ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+
+        create_logrotate bridge_discord "${DISCORD_LOG_PATH}"/"${DISCORD_LOG_FILE}" matrix matrix bridge_discord
+
+        if [ ! -f "${DISCORD_REGISTRATION_PATH}"/"${DISCORD_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_discord] Didn't find a registration file. Generating to '${DISCORD_REGISTRATION_PATH}/${DISCORD_REGISTRATION_FILE}'"
+            discord_generate_registration=true
+        elif var_true "${DISCORD_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_discord] Regenerating registration file to '${DISCORD_REGISTRATION_PATH}/${DISCORD_REGISTRATION_FILE}'"
+            discord_generate_registration=true
+        elif var_true "${discord_force_registration}" ; then
+            print_notice "[configure_discord] Something has changed  - Force generating registration file to '${DISCORD_REGISTRATION_PATH}/${DISCORD_REGISTRATION_FILE}'"
+            discord_generate_registration=true
+        fi
+
+        if var_true "${discord_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${DISCORD_REGISTRATION_PATH}"
+            silent s6-setuidgid matrix mautrix-discord \
                                                     -g \
-                                                    -c /data/config.yaml \
-                                                    -r "${DISCORD_DATA_PATH}"/"${DISCORD_REGISTRATION_FILE}"
-
-
-            print_notice "[configure_discord] Didn't find a registration file. Autogenerating to '${DISCORD_DATA_PATH}/${DISCORD_REGISTRATION_FILE}'"
-            print_notice "[configure_discord] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+                                                    -c "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}" \
+                                                    -r "${DISCORD_REGISTRATION_PATH}"/"${DISCORD_REGISTRATION_FILE}" \
+                                                    || exit $?
+            print_notice "[configure_discord] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
     fi
 }
@@ -113,7 +338,7 @@ configure_facebook() {
                                         .homeserver.async_media = env(FACEBOOK_HOMESERVER_ENABLE_ASYNC_UPLOADS)
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .appservice.address = env(FACEBOOK_APPSERVER_ADDRESS) |
                                         .appservice.hostname = env(FACEBOOK_LISTEN_IP) |
                                         .appservice.port = env(FACEBOOK_LISTEN_PORT) |
@@ -161,7 +386,7 @@ configure_facebook() {
                                         ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
         fi
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .appservice.public.enabled = env(FACEBOOK_ENABLE_PUBLIC) |
                                         .appservice.public.prefix = env(FACEBOOK_PUBLIC_PREFIX) |
                                         .appservice.public.external = env(FACEBOOK_PUBLIC_EXTERNAL_URL) |
@@ -170,17 +395,18 @@ configure_facebook() {
                                         .appservice.public.segment_key = env(FACEBOOK_SEGMENT_API_KEY)
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .metrics.enabled = env(FACEBOOK_ENABLE_METRICS) |
                                         .metrics.listen_port = env(FACEBOOK_METRICS_LISTEN_PORT)
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .manhole.enabled = env(FACEBOOK_ENABLE_MANHOLE) |
                                         .manhole.path = env(FACEBOOK_MANHOLE_SOCKET) |
                                         .manhole.whitelist = [ "'$(echo ${FACEBOOK_MANHOLE_WHITELIST//,/\",\"})'" ]
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
-        s6-setuidgid matrix yq -i    '
+
+        s6-setuidgid matrix yq -i   '
                                         .bridge.username_template = strenv(FACEBOOK_TEMPLATE_USERNAME) |
                                         .bridge.displayname_template = strenv(FACEBOOK_TEMPLATE_DISPLAYNAME) |
                                         .bridge.displayname_preference = [ "'$(echo ${FACEBOOK_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
@@ -238,9 +464,9 @@ configure_facebook() {
                 else
                     export FBRELAY=$fbrelay
                 fi
-                s6-setuidgid matrix yq -i    '
-                                            .bridge.permissions.[  "'$(echo ${FBRELAY})'" ]+= "relay"
-                                        ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[  "'$(echo ${FBRELAY})'" ]+= "relay"
+                                            ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
             done
         fi
 
@@ -290,7 +516,7 @@ configure_facebook() {
             ;;
         esac
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .logging.version = 1 |
                                         .logging.handlers.file.class = "logging.FileHandler" |
                                         .logging.handlers.file.filename = "'$(echo "${FACEBOOK_LOG_PATH}/${FACEBOOK_LOG_FILE}")'" |
@@ -331,138 +557,1649 @@ configure_facebook() {
 
 configure_googlechat() {
     if [ "${SETUP_TYPE,,}" = "auto" ] ; then
-        if [ -f "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}" ]; then
-            sudo matrix cp -R /assets/config/googlechat/example.config.yml "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+        set -a
+        source /assets/defaults/bridge_googlechat
+        set +a
+        print_debug "[configure_googlechat]"
+        if [ ! -d "${GOOGLECHAT_CONFIG_PATH}" ] ; then
+            mkdir -p "${GOOGLECHAT_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${GOOGLECHAT_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${GOOGLECHAT_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${GOOGLECHAT_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${GOOGLECHAT_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${GOOGLECHAT_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${GOOGLECHAT_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${GOOGLECHAT_LOG_PATH}" ] ; then
+            mkdir -p "${GOOGLECHAT_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${GOOGLECHAT_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${GOOGLECHAT_LOG_PATH}" ; fi
+
+        case "${GOOGLECHAT_DB_TYPE,,}" in
+            postgres* )
+                sanity_var GOOGLECHAT_DB_USER "DB Username for Google Chat"
+                sanity_var GOOGLECHAT_DB_PASS "DB Password for Google Chat"
+                sanity_var GOOGLECHAT_DB_HOST "DB Host for Google Chat"
+                sanity_var GOOGLECHAT_DB_NAME "DB Name for Google Chat"
+                counter=0
+                export PGPASSWORD=${GOOGLECHAT_DB_PASS}
+                until pg_isready --dbname="${GOOGLECHAT_DB_NAME}" --host="${GOOGLECHAT_DB_HOST}" --port="${GOOGLECHAT_DB_PORT}" --username="${GOOGLECHAT_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${GOOGLECHAT_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                export GOOGLECHAT_DB_STRING=${GOOGLECHAT_DB_STRING:-"postgres://${GOOGLECHAT_DB_USER}:${GOOGLECHAT_DB_PASS}@${GOOGLECHAT_DB_HOST}:${GOOGLECHAT_DB_PORT}/${GOOGLECHAT_DB_NAME}"}
+            set +x
+            ;;
+            sqlite* )
+                if [ ! -d "${GOOGLECHAT_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${GOOGLECHAT_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${GOOGLECHAT_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${GOOGLECHAT_DB_SQLITE_PATH}" ; fi
+
+                export GOOGLECHAT_DB_STRING=${GOOGLECHAT_DB_STRING:-"sqlite://${GOOGLECHAT_DB_SQLITE_PATH}/${GOOGLECHAT_DB_SQLITE_FILE}"}
+            ;;
+        esac
+
+        if [ ! -f "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/googlechat/example.config.yaml "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
         fi
 
-#        if [[ "$(yq e '.logging.handlers.file.filename' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}")" == "./mautrix-googlechat.log" ]]; then
-#            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
-#            yq -I4 e -i 'del(.logging.handlers.file)' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
-#        fi
-        ## Do some config here
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(GOOGLECHAT_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(GOOGLECHAT_HOMESERVER_DOMAIN) |
+                                        .homeserver.verify_ssl = env(GOOGLECHAT_HOMESERVER_TLS_VERIFY) |
+                                        .homeserver.software = env(GOOGLECHAT_HOMESERVER_SOFTWARE) |
+                                        .homeserver.http_retry_count = env(GOOGLECHAT_HOMESERVER_HTTP_RETRY_COUNT) |
+                                        .homeserver.status_endpoint = env(GOOGLECHAT_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(GOOGLECHAT_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(GOOGLECHAT_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
 
-        create_logrotate bridge_googlechat "${GOOGLECHAT_LOG_PATH}"/"${GOOGLECHAT_LOG_FILE}" matrix matrix
+        s6-setuidgid matrix yq -i   '
+                                        .appservice.address = env(GOOGLECHAT_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(GOOGLECHAT_LISTEN_IP) |
+                                        .appservice.port = env(GOOGLECHAT_LISTEN_PORT) |
+                                        .appservice.max_body_size = env(GOOGLECHAT_MAX_BODY_SIZE) |
+                                        .appservice.database = env(GOOGLECHAT_DB_STRING) |
+                                        .appservice.database_opts.min_size = env(GOOGLECHAT_DB_MIN_SIZE) |
+                                        .appservice.database_opts.max_size = env(GOOGLECHAT_DB_MAX_SIZE) |
+                                        .appservice.id = env(GOOGLECHAT_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(GOOGLECHAT_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(GOOGLECHAT_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(GOOGLECHAT_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(GOOGLECHAT_ENABLE_EPHEMERAL_EVENTS)
+                                    ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
 
-        if [ ! -f "${GOOGLECHAT_DATA_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}" ]; then
-            python3 -m mautrix_googlechat \
-                    -g \
-                    -c "${GOOGLECHAT_CONFIG_PATH}"/${GOOGLECHAT_CONFIG_FILE} \
-                    -r "${GOOGLECHAT_DATA_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}" \
-                    || exit $?
+        if [ -f "${GOOGLECHAT_REGISTRATION_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}" && [ -z "${GOOGLECHAT_AS_TOKEN}" ] ; then
+            print_debug "[configure_googlechat] Setting as_token in configuration from previously generated registration file"
+            export TOI_GOOGLECHAT_AS_TOKEN=$(yq '.as_token' "${GOOGLECHAT_REGISTRATION_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_GOOGLECHAT_AS_TOKEN)
+                                        ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+            fbastokenskip=true
+        elif [ -n "${GOOGLECHAT_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"; then
+            print_notice "You've supplied 'GOOGLECHAT_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${GOOGLECHAT_AS_TOKEN}" ] ; then
+            print_debug "[configure_googlechat] Updating GOOGLECHAT_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(GOOGLECHAT_AS_TOKEN)
+                                        ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+        fi
 
-            print_notice "[configure_googlechat] Didn't find a registration file. Autogenerating to '${GOOGLECHAT_DATA_PATH}/${GOOGLECHAT_REGISTRATION_FILE}'"
-            print_notice "[configure_googlechat] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        if [ -f "${GOOGLECHAT_REGISTRATION_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}" && [ -z "${GOOGLECHAT_HS_TOKEN}" ] ; then
+            print_debug "[configure_googlechat] Setting hs_token in configuration from previously generated registration file"
+            export TOI_GOOGLECHAT_HS_TOKEN=$(yq '.hs_token' "${GOOGLECHAT_REGISTRATION_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_GOOGLECHAT_HS_TOKEN)
+                                        ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+            googlechathstokenskip=true
+        elif [ -n "${GOOGLECHAT_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"; then
+            print_notice "You've supplied 'GOOGLECHAT_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${GOOGLECHAT_HS_TOKEN}" ] ; then
+            print_debug "[configure_googlechat] Updating GOOGLECHAT_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(GOOGLECHAT_HS_TOKEN)
+                                        ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .hangouts.device_name = env(GOOGLECHAT_HANGOUTS_DEVICE_NAME)
+                                    ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .metrics.enabled = env(GOOGLECHAT_ENABLE_METRICS) |
+                                        .metrics.listen_port = env(GOOGLECHAT_METRICS_LISTEN_PORT)
+                                    ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .manhole.enabled = env(GOOGLECHAT_ENABLE_MANHOLE) |
+                                        .manhole.path = env(GOOGLECHAT_MANHOLE_SOCKET) |
+                                        .manhole.whitelist = [ "'$(echo ${GOOGLECHAT_MANHOLE_WHITELIST//,/\",\"})'" ]
+                                    ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .bridge.username_template = strenv(GOOGLECHAT_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = strenv(GOOGLECHAT_TEMPLATE_DISPLAYNAME) |
+                                        .bridge.command_prefix = "'$(echo ${GOOGLECHAT_COMMAND_PREFIX})'" |
+                                        .bridge.inital_chat_sync = env(GOOGLECHAT_INITIAL_CHAT_SYNC) |
+                                        .bridge.invite_own_puppet_to_pm = env(GOOGLECHAT_INVITE_OWN_PUPPET_TO_PM) |
+                                        .bridge.sync_with_custom_puppets = env(GOOGLECHAT_SYNC_WITH_CUSTOM_PUPPETS) |
+                                        .bridge.sync_direct_chat_list = env(GOOGLECHAT_SYNC_DIRECT_CHAT_LIST) |
+                                        .bridge.update_avatar_initial_sync = env(GOOGLECHAT_SYNC_UPDATE_AVATAR) |
+                                        .bridge.encryption.allow = env(GOOGLECHAT_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(GOOGLECHAT_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(GOOGLECHAT_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(GOOGLECHAT_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(GOOGLECHAT_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(GOOGLECHAT_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(GOOGLECHAT_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(GOOGLECHAT_ENCRYPTION_ROTATION_MESSAGES) |
+                                        .bridge.delivery_receipts = env(GOOGLECHAT_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.delivery_error_reports = env(GOOGLECHAT_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                        .bridge.message_status_events = env(GOOGLECHAT_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.federate_rooms = env(GOOGLECHAT_FEDERATE_ROOMS) |
+                                        .bridge.backfill.enable = env(GOOGLECHAT_BACKFILL_ENABLE) |
+                                        .bridge.backfill.invite_own_puppet = env(GOOGLECHAT_BACKFILL_INVITE_OWN_PUPPET) |
+                                        .bridge.backfill.initial_thread_limit = env(GOOGLECHAT_BACKFILL_INITIAL_THREAD_LIMIT) |
+                                        .bridge.backfill.initial_thread_reply_limit = env(GOOGLECHAT_BACKFILL_INITIAL_THREAD_REPLY_LIMIT) |
+                                        .bridge.backfill.initial_nonthread_limit = env(GOOGLECHAT_BACKFILL_INITIAL_NONTHREAD_LIMIT) |
+                                        .bridge.backfill.missed_event_limit = env(GOOGLECHAT_BACKFILL_BACKFILL_MISSED_EVENT_LIMIT) |
+                                        .bridge.backfill.missed_event_page_size = env(GOOGLECHAT_BACKFILL_BACKFILL_MISSED_EVENT_PAGE_SIZE) |
+                                        .bridge.backfill.disable_notifications = env(GOOGLECHAT_BACKFILL_DISABLE_NOTIFICATIONS) |
+                                        .bridge.disable_bridge_notices = env(GOOGLECHAT_DISABLE_BRIDGE_NOTICES) |
+                                        .bridge.resend_bridge_info = env(GOOGLECHAT_RESEND_BRIDGE_INFO) |
+                                        .bridge.unimportant_bridge_notices = env(GOOGLECHAT_UNIMPORTANT_BRIDGE_NOTICES)
+                                        .bridge.provisioning.enabled = env(GOOGLECHAT_PROVISIONING_ENABLE) |
+                                        .bridge.provisioning.prefix = env(GOOGLECHAT_PROVISIONING_PREFIX) |
+                                        .bridge.provisioning.segment_key = env(GOOGLECHAT_PROVISIONING_SEGMENT_KEY) |
+                                    ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${GOOGLECHAT_PERMISSIONS_RELAY}" ] ; then
+            gcrelays=$(echo "${GOOGLECHAT_PERMISSIONS_RELAY}" | tr "," "\n")
+            for gcrelay in $gcrelays; do
+                if [ "$gcrelay" = "*" ] ; then
+                    export GCRELAY="PLACEHOLDERASTERISK"
+                else
+                    export GCRELAY=$gcrelay
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[  "'$(echo ${GCRELAY})'" ]+= "relay"
+                                            ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${GOOGLECHAT_PERMISSIONS_ADMIN}" ] ; then
+            gcadmins=$(echo "${GOOGLECHAT_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for gcadmin in $gcadmins; do
+                if [ "$gcadmin" = "*" ] ; then
+                    export GCADMIN="PLACEHOLDERASTERISK"
+                else
+                    export GCADMIN=$gcadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${GCADMIN})'" ] += "admin"
+                                            ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${GOOGLECHAT_PERMISSIONS_USER}" ] ; then
+            gcusers=$(echo "${GOOGLECHAT_PERMISSIONS_USER}" | tr "," "\n")
+            for gcuser in $gcusers; do
+                if [ "$gcuser" = "*" ] ; then
+                    export GCUSER="PLACEHOLDERASTERISK"
+                else
+                    export GCUSER=$gcuser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(GCUSER)] += "user"
+                                            ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+        fi
+
+        case "${GOOGLECHAT_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_googlechat "${GOOGLECHAT_LOG_PATH}"/"${GOOGLECHAT_LOG_FILE}" matrix matrix bridge_googlechat
+                export GOOGLECHAT_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export GOOGLECHAT_LOG_TYPE="console"
+            ;;
+            "file" )
+                create_logrotate bridge_googlechat "${GOOGLECHAT_LOG_PATH}"/"${GOOGLECHAT_LOG_FILE}" matrix matrix bridge_googlechat
+                export GOOGLECHAT_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i   '
+                                        .logging.version = 1 |
+                                        .logging.handlers.file.class = "logging.FileHandler" |
+                                        .logging.handlers.file.filename = "'$(echo "${GOOGLECHAT_LOG_PATH}/${GOOGLECHAT_LOG_FILE}")'" |
+                                        del(.logging.handlers.file.backupCount) |
+                                        del(.logging.handlers.file.maxBytes) |
+                                        .logging.loggers.mau.level = env(GOOGLECHAT_LOG_LEVEL_MAU) |
+                                        .logging.loggers.maugclib.level = env(GOOGLECHAT_LOG_LEVEL_MAUGCLIB) |
+                                        .logging.loggers.aiohttp.level = env(GOOGLECHAT_LOG_LEVEL_AIOHTTP) |
+                                        .logging.root.level = env(GOOGLECHAT_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${GOOGLECHAT_LOG_TYPE,,//,/\",\"}")'" ]
+                                    ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+
+        if [ ! -f "${GOOGLECHAT_REGISTRATION_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_googlechat] Didn't find a registration file. Generating to '${GOOGLECHAT_REGISTRATION_PATH}/${GOOGLECHAT_REGISTRATION_FILE}'"
+            gc_generate_registration=true
+        elif var_true "${GOOGLECHAT_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_googlechat] Regenerating registration file to '${GOOGLECHAT_REGISTRATION_PATH}/${GOOGLECHAT_REGISTRATION_FILE}'"
+            gc_generate_registration=true
+        elif var_true "${fb_force_registration}" ; then
+            print_notice "[configure_googlechat] Something has changed  - Force generating registration file to '${GOOGLECHAT_REGISTRATION_PATH}/${GOOGLECHAT_REGISTRATION_FILE}'"
+            gc_generate_registration=true
+        fi
+
+        if var_true "${gc_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${GOOGLECHAT_REGISTRATION_PATH}"
+            s6-setuidgid matrix python3 -m mautrix_googlechat \
+                                                        -g \
+                                                        -c "${GOOGLECHAT_CONFIG_PATH}"/${GOOGLECHAT_CONFIG_FILE} \
+                                                        -r "${GOOGLECHAT_REGISTRATION_PATH}"/"${GOOGLECHAT_REGISTRATION_FILE}" \
+                                                        || exit $?
+            print_notice "[configure_googlechat] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
     fi
 }
 
+cofnigure_hookshot() {
+    :
+}
+
 configure_instagram() {
     if [ "${SETUP_TYPE,,}" = "auto" ] ; then
-        if [ -f "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}" ]; then
-            sudo matrix cp -R /assets/config/instagram/example.config.yml "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+        set -a
+        source /assets/defaults/bridge_instagram
+        set +a
+        print_debug "[configure_instagram]"
+        if [ ! -d "${INSTAGRAM_CONFIG_PATH}" ] ; then
+            mkdir -p "${INSTAGRAM_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${INSTAGRAM_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${INSTAGRAM_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${INSTAGRAM_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${INSTAGRAM_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${INSTAGRAM_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${INSTAGRAM_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${INSTAGRAM_LOG_PATH}" ] ; then
+            mkdir -p "${INSTAGRAM_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${INSTAGRAM_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${INSTAGRAM_LOG_PATH}" ; fi
+
+        case "${INSTAGRAM_DB_TYPE,,}" in
+            postgres* )
+                sanity_var INSTAGRAM_DB_USER "DB Username for Instagram"
+                sanity_var INSTAGRAM_DB_PASS "DB Password for Instagram"
+                sanity_var INSTAGRAM_DB_HOST "DB Host for Instagram"
+                sanity_var INSTAGRAM_DB_NAME "DB Name for Instagram"
+                counter=0
+                export PGPASSWORD=${INSTAGRAM_DB_PASS}
+                until pg_isready --dbname="${INSTAGRAM_DB_NAME}" --host="${INSTAGRAM_DB_HOST}" --port="${INSTAGRAM_DB_PORT}" --username="${INSTAGRAM_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${INSTAGRAM_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                export INSTAGRAM_DB_STRING=${INSTAGRAM_DB_STRING:-"postgres://${INSTAGRAM_DB_USER}:${INSTAGRAM_DB_PASS}@${INSTAGRAM_DB_HOST}:${INSTAGRAM_DB_PORT}/${INSTAGRAM_DB_NAME}"}
+            set +x
+            ;;
+            sqlite* )
+                if [ ! -d "${INSTAGRAM_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${INSTAGRAM_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${INSTAGRAM_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${INSTAGRAM_DB_SQLITE_PATH}" ; fi
+
+                export INSTAGRAM_DB_STRING=${INSTAGRAM_DB_STRING:-"sqlite://${INSTAGRAM_DB_SQLITE_PATH}/${INSTAGRAM_DB_SQLITE_FILE}"}
+            ;;
+        esac
+
+        if [ ! -f "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/instagram/example.config.yaml "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
         fi
 
-#        if [[ "$(yq e '.logging.handlers.file.filename' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}")" == "./mautrix-instagram.log" ]]; then
-#            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
-#            yq -I4 e -i 'del(.logging.handlers.file)' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
-#        fi
-        ## Do some config here
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(INSTAGRAM_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(INSTAGRAM_HOMESERVER_DOMAIN) |
+                                        .homeserver.verify_ssl = env(INSTAGRAM_HOMESERVER_TLS_VERIFY) |
+                                        .homeserver.software = env(INSTAGRAM_HOMESERVER_SOFTWARE) |
+                                        .homeserver.http_retry_count = env(INSTAGRAM_HOMESERVER_HTTP_RETRY_COUNT) |
+                                        .homeserver.status_endpoint = env(INSTAGRAM_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(INSTAGRAM_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(INSTAGRAM_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
 
-        create_logrotate bridge_instagram "${INSTAGRAM_LOG_PATH}"/"${INSTAGRAM_LOG_FILE}" matrix matrix
+        s6-setuidgid matrix yq -i   '
+                                        .appservice.address = env(INSTAGRAM_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(INSTAGRAM_LISTEN_IP) |
+                                        .appservice.port = env(INSTAGRAM_LISTEN_PORT) |
+                                        .appservice.max_body_size = env(INSTAGRAM_MAX_BODY_SIZE) |
+                                        .appservice.database = env(INSTAGRAM_DB_STRING) |
+                                        .appservice.database_opts.min_size = env(INSTAGRAM_DB_MIN_SIZE) |
+                                        .appservice.database_opts.max_size = env(INSTAGRAM_DB_MAX_SIZE) |
+                                        .appservice.id = env(INSTAGRAM_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(INSTAGRAM_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(INSTAGRAM_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(INSTAGRAM_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(INSTAGRAM_ENABLE_EPHEMERAL_EVENTS)
+                                    ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
 
-        if [ ! -f "${INSTAGRAM_DATA_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}" ]; then
-            s6-setuidgid matrix mkdir -p "${INSTAGRAM_DATA_PATH}"
+
+        if [ -f "${INSTAGRAM_REGISTRATION_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}" && [ -z "${INSTAGRAM_AS_TOKEN}" ] ; then
+            print_debug "[configure_instagram] Setting as_token in configuration from previously generated registration file"
+            export TOI_INSTAGRAM_AS_TOKEN=$(yq '.as_token' "${INSTAGRAM_REGISTRATION_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_INSTAGRAM_AS_TOKEN)
+                                        ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+            fbastokenskip=true
+        elif [ -n "${INSTAGRAM_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"; then
+            print_notice "You've supplied 'INSTAGRAM_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${INSTAGRAM_AS_TOKEN}" ] ; then
+            print_debug "[configure_instagram] Updating INSTAGRAM_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(INSTAGRAM_AS_TOKEN)
+                                        ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+        fi
+
+        if [ -f "${INSTAGRAM_REGISTRATION_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}" && [ -z "${INSTAGRAM_HS_TOKEN}" ] ; then
+            print_debug "[configure_instagram] Setting hs_token in configuration from previously generated registration file"
+            export TOI_INSTAGRAM_HS_TOKEN=$(yq '.hs_token' "${INSTAGRAM_REGISTRATION_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_INSTAGRAM_HS_TOKEN)
+                                        ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+            ighstokenskip=true
+        elif [ -n "${INSTAGRAM_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"; then
+            print_notice "You've supplied 'INSTAGRAM_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${INSTAGRAM_HS_TOKEN}" ] ; then
+            print_debug "[configure_instagram] Updating INSTAGRAM_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(INSTAGRAM_HS_TOKEN)
+                                        ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .metrics.enabled = env(INSTAGRAM_ENABLE_METRICS) |
+                                        .metrics.listen_port = env(INSTAGRAM_METRICS_LISTEN_PORT)
+                                    ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .manhole.enabled = env(INSTAGRAM_ENABLE_MANHOLE) |
+                                        .manhole.path = env(INSTAGRAM_MANHOLE_SOCKET) |
+                                        .manhole.whitelist = [ "'$(echo ${INSTAGRAM_MANHOLE_WHITELIST//,/\",\"})'" ]
+                                    ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .bridge.username_template = env(INSTAGRAM_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = env(INSTAGRAM_TEMPLATE_DISPLAYNAME) |
+                                        .bridge.private_chat_name_template = env(INSTAGRAM_TEMPLATE_PRIVATE_CHAT_NAME) |
+                                        .bridge.group_chat_name_template = env(INSTAGRAM_TEMPLATE_GROUP_CHAT_NAME) |
+                                        .bridge.displayname_max_length = env(INSTAGRAM_DISPLAYNAME_MAX_LENGTH) |
+                                        .bridge.max_startup_thread_sync_count = env(INSTAGRAM_MAX_STARTUP_THREAD_SYNC_COUNT) |
+                                        .bridge.sync_with_custom_puppets = env(INSTAGRAM_SYNC_WITH_CUSTOM_PUPPETS) |
+                                        .bridge.sync_direct_chat_list = env(INSTAGRAM_SYNC_DIRECT_CHAT_LIST) |
+                                        .bridge.double_puppet_allow_discovery = env(INSTAGRAM_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
+                                        .bridge.federate_rooms = env(INSTAGRAM_FEDERATE_ROOMS) |
+                                        .bridge.backfill.enable = env(INSTAGRAM_BACKFILL_ENABLE) |
+                                        .bridge.backfill.msc2716 = env(INSTAGRAM_BACKFILL_ENABLE_MSC2716) |
+                                        .bridge.backfill.double_puppet_backfill = env(INSTAGRAM_BACKFILL_DOUBLE_PUPPET) |
+                                        .bridge.backfill.max_conversations = env(INSTAGRAM_BACKFILL_MAX_CONVERSATIONS) |
+                                        .bridge.backfill.min_sync_thread_delay = env(INSTAGRAM_BACKFILL_SYNC_THREAD_DELAY) |
+                                        .bridge.backfill.unread_hours_threshold = env(INSTAGRAM_BACKFILL_UNREAD_HOURS_THRESHOLD) |
+                                        .bridge.backfill.backoff.thread_list = env(INSTAGRAM_BACKFILL_BACKOFF_THREAD_LIST) |
+                                        .bridge.backfill.backoff.message_history = env(INSTAGRAM_BACKFILL_BACKOFF_MESSAGE_HISTORY) |
+                                        .bridge.backfill.incremental.max_pages = env(INSTAGRAM_BACKFILL_INCREMENTAL_MAX_PAGES) |
+                                        .bridge.backfill.incremental.max_total_pages = env(INSTAGRAM_BACKFILL_INCREMENTAL_MAX_TOTAL_PAGES) |
+                                        .bridge.backfill.incremental.page_delay = env(INSTAGRAM_BACKFILL_INCREMENTAL_PAGE_DELAY) |
+                                        .bridge.backfill.incremental.post_batch_delay = env(INSTAGRAM_BACKFILL_INCREMENTAL_POST_BATCH_DELAY) |
+                                        .bridge.backfill.periodic_reconnect.interval = env(INSTAGRAM_PERIODIC_CONNECT_INTERVAL) |
+                                        .bridge.backfill.periodic_reconnect.resync = env(INSTAGRAM_PERIODIC_CONNECT_RESYNC) |
+                                        .bridge.backfill.periodic_reconnect.always = env(INSTAGRAM_PERIODIC_CONNECT_ALWAYS) |
+                                        .bridge.get_proxy_api_url = env(INSTAGRAM_GET_PROXY_API_URL) |
+                                        .bridge.encryption.allow = env(INSTAGRAM_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(INSTAGRAM_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(INSTAGRAM_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(INSTAGRAM_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(INSTAGRAM_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(INSTAGRAM_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(INSTAGRAM_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(INSTAGRAM_ENCRYPTION_ROTATION_MESSAGES)
+                                        .bridge.command_prefix = "'$(echo ${INSTAGRAM_COMMAND_PREFIX})'" |
+                                        .bridge.private_chat_portal_meta = env(INSTAGRAM_PRIVATE_CHAT_PORTA_META) |
+                                        .bridge.delivery_receipts = env(INSTAGRAM_ENABLE_DELIVERY_RECIPTS) |
+                                        .bridge.delivery_error_reports = env(INSTAGRAM_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                        .bridge.message_status_events = env(INSTAGRAM_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.resend_bridge_info = env(INSTAGRAM_RESEND_BRIDGE_INFO) |
+                                        .bridge.unimportant_bridge_notices = env(INSTAGRAM_UNIMPORTANT_BRIDGE_NOTICES) |
+                                        .bridge.disable_bridge_notices = env(INSTAGRAM_DISABLE_BRIDGE_NOTICES) |
+                                        .bridge.caption_in_message = env(INSTAGRAM_CAPTION_IN_MESSAGE) |
+                                        .bridge.bridge_notices = env(INSTAGRAM_ENABLE_BRIDGE_NOTICES) |
+                                        .bridge.provisioning.enabled = env(INSTAGRAM_PROVISIONING_ENABLE) |
+                                        .bridge.provisioning.prefix = env(INSTAGRAM_PROVISIONING_PREFIX) |
+                                        .bridge.provisioning.segment_key = env(INSTAGRAM_PROVISIONING_SEGMENT_KEY) |
+                                        .bridge.resync_max_disconnected_time = env(INSTAGRAM_RESYNC_MAX_DISCONNECTED_TIME) |
+                                        .bridge.sync_on_startup = env(INSTAGRAM_SYNC_ON_STARTUP) |
+                                        .bridge.temporary_disconnect_notices = env(INSTAGRAM_TEMPORARY_DISCONNECT_NOTICES) |
+                                        .bridge.on_reconnection_fail.action = env(INSTAGRAM_RECONNECTION_FAIL_ACTION) |
+                                        .bridge.on_reconnection_fail.wait_for = env(INSTAGRAM_RECONNECTION_FAIL_WAIT) |
+                                        .bridge.disable_bridge_notices = env(INSTAGRAM_DISABLE_BRIDGE_NOTICES) |
+                                        .bridge.resend_bridge_info = env(INSTAGRAM_RESEND_BRIDGE_INFO) |
+                                        .bridge.mute_bridging = env(INSTAGRAM_MUTE_BRIDGING) |
+                                        .bridge.tag_only_on_create = env(INSTAGRAM_TAG_ONLY_ON_CREATE) |
+                                        .bridge.sandbox_media_download = env(INSTAGRAM_SANDBOX_MEDIA_DOWNLOAD) |
+                                    ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${INSTAGRAM_PERMISSIONS_RELAY}" ] ; then
+            igrelays=$(echo "${INSTAGRAM_PERMISSIONS_RELAY}" | tr "," "\n")
+            for igrelay in $igrelays; do
+                if [ "$igrelay" = "*" ] ; then
+                    export IGRELAY="PLACEHOLDERASTERISK"
+                else
+                    export IGRELAY=$gcrelay
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[  "'$(echo ${IGRELAY})'" ]+= "relay"
+                                            ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${INSTAGRAM_PERMISSIONS_ADMIN}" ] ; then
+            igadmins=$(echo "${INSTAGRAM_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for igadmin in $igadmins; do
+                if [ "$igadmin" = "*" ] ; then
+                    export IGADMIN="PLACEHOLDERASTERISK"
+                else
+                    export IGADMIN=$igadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${IGADMIN})'" ] += "admin"
+                                            ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${INSTAGRAM_PERMISSIONS_USER}" ] ; then
+            igusers=$(echo "${INSTAGRAM_PERMISSIONS_USER}" | tr "," "\n")
+            for iguser in $igusers; do
+                if [ "$iguser" = "*" ] ; then
+                    export IGUSER="PLACEHOLDERASTERISK"
+                else
+                    export IGUSER=$iguser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(IGUSER)] += "user"
+                                            ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+        fi
+
+        case "${INSTAGRAM_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_instagram "${INSTAGRAM_LOG_PATH}"/"${INSTAGRAM_LOG_FILE}" matrix matrix bridge_instagram
+                export INSTAGRAM_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export INSTAGRAM_LOG_TYPE="console"
+            ;;
+            "file" )
+                create_logrotate bridge_instagram "${INSTAGRAM_LOG_PATH}"/"${INSTAGRAM_LOG_FILE}" matrix matrix bridge_instagram
+                export INSTAGRAM_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i    '
+                                        .logging.version = 1 |
+                                        .logging.handlers.file.class = "logging.FileHandler" |
+                                        .logging.handlers.file.filename = "'$(echo "${INSTAGRAM_LOG_PATH}/${INSTAGRAM_LOG_FILE}")'" |
+                                        del(.logging.handlers.file.backupCount) |
+                                        del(.logging.handlers.file.maxBytes) |
+                                        .logging.loggers.mau.level = env(INSTAGRAM_LOG_LEVEL_MAU) |
+                                        .logging.loggers.mauigapi.level = env(INSTAGRAM_LOG_LEVEL_MAUIGAPI) |
+                                        .logging.loggers.paho.mqtt.level = env(INSTAGRAM_LOG_LEVEL_PAHO) |
+                                        .logging.loggers.aiohttp.level = env(INSTAGRAM_LOG_LEVEL_AIOHTTP) |
+                                        .logging.root.level = env(INSTAGRAM_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${INSTAGRAM_LOG_TYPE,,//,/\",\"}")'" ]
+                                    ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+
+        if [ ! -f "${INSTAGRAM_REGISTRATION_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_instagram] Didn't find a registration file. Generating to '${INSTAGRAM_REGISTRATION_PATH}/${INSTAGRAM_REGISTRATION_FILE}'"
+            instagram_generate_registration=true
+        elif var_true "${INSTAGRAM_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_instagram] Regenerating registration file to '${INSTAGRAM_REGISTRATION_PATH}/${INSTAGRAM_REGISTRATION_FILE}'"
+            instagram_generate_registration=true
+        elif var_true "${fb_force_registration}" ; then
+            print_notice "[configure_instagram] Something has changed  - Force generating registration file to '${INSTAGRAM_REGISTRATION_PATH}/${INSTAGRAM_REGISTRATION_FILE}'"
+            instagram_generate_registration=true
+        fi
+
+        if var_true "${instagram_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${INSTAGRAM_REGISTRATION_PATH}"
             s6-setuidgid matrix python3 -m mautrix_instagram \
                                                         -g \
                                                         -c "${INSTAGRAM_CONFIG_PATH}"/${INSTAGRAM_CONFIG_FILE} \
-                                                        -r "${INSTAGRAM_DATA_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}" \
+                                                        -r "${INSTAGRAM_REGISTRATION_PATH}"/"${INSTAGRAM_REGISTRATION_FILE}" \
                                                         || exit $?
-
-            print_notice "[configure_instagram] Didn't find a registration file. Autogenerating to '${INSTAGRAM_DATA_PATH}/${INSTAGRAM_REGISTRATION_FILE}'"
-            print_notice "[configure_instagram] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+            print_notice "[configure_instagram] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
     fi
 }
 
 configure_signal() {
     if [ "${SETUP_TYPE,,}" = "auto" ] ; then
-        if [ -f "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}" ]; then
-            sudo matrix cp -R /assets/config/signal/example.config.yml "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+        set -a
+        source /assets/defaults/bridge_signal
+        set +a
+        print_debug "[configure_signal]"
+        sanity_var SIGNAL_SOCKET "Socket file for SignalD"
+        if [ ! -d "${SIGNAL_CONFIG_PATH}" ] ; then
+            mkdir -p "${SIGNAL_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${SIGNAL_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${SIGNAL_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${SIGNAL_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${SIGNAL_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${SIGNAL_LOG_PATH}" ] ; then
+            mkdir -p "${SIGNAL_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${SIGNAL_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_LOG_PATH}" ; fi
+
+
+        if [ ! -d "${SIGNAL_ATTACHMENT_PATH}" ] ; then
+            mkdir -p "${SIGNAL_ATTACHMENT_PATH}"
+        fi
+        if [ $(stat -c %U "${SIGNAL_ATTACHMENT_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_ATTACHMENT_PATH}" ; fi
+
+        if [ ! -d "${SIGNAL_AVATAR_PATH}" ] ; then
+            mkdir -p "${SIGNAL_AVATAR_PATH}"
+        fi
+        if [ $(stat -c %U "${SIGNAL_AVATAR_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_AVATAR_PATH}" ; fi
+
+        if [ ! -d "${SIGNAL_AUTHDATA_PATH}" ] ; then
+            mkdir -p "${SIGNAL_AUTHDATA_PATH}"
+        fi
+        if [ $(stat -c %U "${SIGNAL_AUTHDATA_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_AUTHDATA_PATH}" ; fi
+
+        case "${SIGNAL_DB_TYPE,,}" in
+            postgres* )
+                sanity_var SIGNAL_DB_USER "DB Username for Signal"
+                sanity_var SIGNAL_DB_PASS "DB Password for Signal"
+                sanity_var SIGNAL_DB_HOST "DB Host for Signal"
+                sanity_var SIGNAL_DB_NAME "DB Name for Signal"
+                counter=0
+                export PGPASSWORD=${SIGNAL_DB_PASS}
+                until pg_isready --dbname="${SIGNAL_DB_NAME}" --host="${SIGNAL_DB_HOST}" --port="${SIGNAL_DB_PORT}" --username="${SIGNAL_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${SIGNAL_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                export SIGNAL_DB_STRING=${SIGNAL_DB_STRING:-"postgres://${SIGNAL_DB_USER}:${SIGNAL_DB_PASS}@${SIGNAL_DB_HOST}:${SIGNAL_DB_PORT}/${SIGNAL_DB_NAME}"}
+            set +x
+            ;;
+            sqlite* )
+                if [ ! -d "${SIGNAL_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${SIGNAL_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${SIGNAL_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_DB_SQLITE_PATH}" ; fi
+
+                export SIGNAL_DB_STRING=${SIGNAL_DB_STRING:-"sqlite://${SIGNAL_DB_SQLITE_PATH}/${SIGNAL_DB_SQLITE_FILE}"}
+            ;;
+        esac
+
+        if [ ! -f "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/signal/example.config.yaml "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
         fi
 
-#        if [[ "$(yq e '.logging.handlers.file.filename' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}")" == "./mautrix-signal.log" ]]; then
-#            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
-#            yq -I4 e -i 'del(.logging.handlers.file)' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
-#        fi
-        ## Do some config here
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(SIGNAL_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(SIGNAL_HOMESERVER_DOMAIN) |
+                                        .homeserver.verify_ssl = env(SIGNAL_HOMESERVER_TLS_VERIFY) |
+                                        .homeserver.software = env(SIGNAL_HOMESERVER_SOFTWARE) |
+                                        .homeserver.http_retry_count = env(SIGNAL_HOMESERVER_HTTP_RETRY_COUNT) |
+                                        .homeserver.status_endpoint = env(SIGNAL_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(SIGNAL_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.connection_limit = env(SIGNAL_HOMESERVER_CONNECTION_LIMIT) |
+                                        .homeserver.async_media = env(SIGNAL_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
 
-        create_logrotate bridge_signal "${SIGNAL_LOG_PATH}"/"${SIGNAL_LOG_FILE}" matrix matrix
+        s6-setuidgid matrix yq -i    '
+                                        .appservice.address = env(SIGNAL_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(SIGNAL_LISTEN_IP) |
+                                        .appservice.port = env(SIGNAL_LISTEN_PORT) |
+                                        .appservice.max_body_size = env(SIGNAL_MAX_BODY_SIZE) |
+                                        .appservice.database = env(SIGNAL_DB_STRING) |
+                                        .appservice.database_opts.min_size = env(SIGNAL_DB_MIN_SIZE) |
+                                        .appservice.database_opts.max_size = env(SIGNAL_DB_MAX_SIZE) |
+                                        .appservice.id = env(SIGNAL_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(SIGNAL_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(SIGNAL_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(SIGNAL_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(SIGNAL_ENABLE_EPHEMERAL_EVENTS)
+                                    ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
 
-        if [ ! -f "${SIGNAL_DATA_PATH}"/"${SIGNAL_REGISTRATION_FILE}" ]; then
-            s6-setuidgid matrix mkdir -p "${SIGNAL_DATA_PATH}"
+
+        if [ -f "${SIGNAL_REGISTRATION_PATH}"/"${SIGNAL_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}" && [ -z "${SIGNAL_AS_TOKEN}" ] ; then
+            print_debug "[configure_signal] Setting as_token in configuration from previously generated registration file"
+            export TOI_SIGNAL_AS_TOKEN=$(yq '.as_token' "${SIGNAL_REGISTRATION_PATH}"/"${SIGNAL_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_SIGNAL_AS_TOKEN)
+                                        ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+            fbastokenskip=true
+        elif [ -n "${SIGNAL_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"; then
+            print_notice "You've supplied 'SIGNAL_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${SIGNAL_AS_TOKEN}" ] ; then
+            print_debug "[configure_signal] Updating SIGNAL_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(SIGNAL_AS_TOKEN)
+                                        ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+        fi
+
+        if [ -f "${SIGNAL_REGISTRATION_PATH}"/"${SIGNAL_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}" && [ -z "${SIGNAL_HS_TOKEN}" ] ; then
+            print_debug "[configure_signal] Setting hs_token in configuration from previously generated registration file"
+            export TOI_SIGNAL_HS_TOKEN=$(yq '.hs_token' "${SIGNAL_REGISTRATION_PATH}"/"${SIGNAL_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_SIGNAL_HS_TOKEN)
+                                        ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+            fbhstokenskip=true
+        elif [ -n "${SIGNAL_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"; then
+            print_notice "You've supplied 'SIGNAL_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${SIGNAL_HS_TOKEN}" ] ; then
+            print_debug "[configure_signal] Updating SIGNAL_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(SIGNAL_HS_TOKEN)
+                                        ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .metrics.enabled = env(SIGNAL_ENABLE_METRICS) |
+                                        .metrics.listen_port = env(SIGNAL_METRICS_LISTEN_PORT)
+                                    ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .manhole.enabled = env(SIGNAL_ENABLE_MANHOLE) |
+                                        .manhole.path = env(SIGNAL_MANHOLE_SOCKET) |
+                                        .manhole.whitelist = [ "'$(echo ${SIGNAL_MANHOLE_WHITELIST//,/\",\"})'" ]
+                                    ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+
+        if var_true "${SIGNAL_ALLOW_CONTACT_LIST_NAMES}"; then
+            export SIGNAL_ALLOW_CONTACT_LIST_NAMES="allow"
+        else
+            export SIGNAL_ALLOW_CONTACT_LIST_NAMES="disallow"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .signal.socket_path = env(SIGNAL_SOCKET) |
+                                        .signal.outgoing_attachment_dir = env(SIGNAL_ATTACHMENT_PATH) |
+                                        .signal.avatar_dir = env(SIGNAL_AVATAR_PATH) |
+                                        .signal.data_dir = env(SIGNAL_DATA_PATH) |
+                                        .signal.delete_unknown_accounts_on_start = env(SIGNAL_DELETE_UNKNOWN_ACCOUNTS_ON_START) |
+                                        .signal.remove_file_after_handling = env(SIGNAL_REMOVE_FILE_AFTER_HANDLING) |
+                                        .signal.registration_enabled = env(SIGNAL_REGISTRATION_ENABLED) |
+                                        .signal.enable_disappearing_messages_in_groups = env(SIGNAL_ENABLE_DISAPPEARING_MESSAGES_IN_GROUPS) |
+                                    ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .bridge.username_template = strenv(SIGNAL_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = strenv(SIGNAL_TEMPLATE_DISPLAYNAME) |
+                                        .bridge.contact_list_names = env(SIGNAL_ALLOW_CONTACT_LIST_NAMES) |
+                                        .bridge.displayname_preference = [ "'$(echo ${SIGNAL_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
+                                        .bridge.autocreate_group_portal = env(SIGNAL_AUTOCREATE_GROUP_PORTAL) |
+                                        .bridge.autocreate_contact_portal = env(SIGNAL_AUTOCREATE_CONTACT_PORTAL) |
+                                        .bridge.public_portals = env(SIGNAL_PUBLIC_PORTALS) |
+                                        .bridge.sync_with_custom_puppets = env(SIGNAL_SYNC_WITH_CUSTOM_PUPPETS) |
+                                        .bridge.sync_direct_chat_list = env(SIGNAL_SYNC_DIRECT_CHAT_LIST) |
+                                        .bridge.double_puppet_allow_discovery = env(SIGNAL_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
+                                        .bridge.federate_rooms = env(SIGNAL_FEDERATE_ROOMS) |
+                                        .bridge.encryption.allow = env(SIGNAL_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(SIGNAL_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(SIGNAL_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(SIGNAL_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(SIGNAL_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(SIGNAL_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(SIGNAL_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(SIGNAL_ENCRYPTION_ROTATION_MESSAGES) |
+                                        .bridge.private_chat_portal_meta = env(SIGNAL_PRIVATE_CHAT_PORTAL_META) |
+                                        .bridge.delivery_receipts = env(SIGNAL_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.delivery_error_reports = env(SIGNAL_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                        .bridge.message_status_events = env(SIGNAL_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.resend_bridge_info = env(SIGNAL_RESEND_BRIDGE_INFO) |
+                                        .bridge.periodic_reconnect.interval = env(SIGNAL_PERIODIC_RECONNECT_INTERVAL) |
+                                        .bridge.bridge_matrix_leave= = env(SIGNAL_BRIDGE_MATRIX_LEAVE) |
+                                        .bridge.provisioning.enabled = env(SIGNAL_PROVISIONING_ENABLE) |
+                                        .bridge.provisioning.prefix = env(SIGNAL_PROVISIONING_PREFIX) |
+                                        .bridge.provisioning.segment_key = env(SIGNAL_PROVISIONING_SEGMENT_KEY) |
+                                        .bridge.command_prefix = "'$(echo ${SIGNAL_COMMAND_PREFIX})'" |
+                                        .bridge.management_room_text.welcome = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME) |
+                                        .bridge.management_room_text.welcome_connected = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_CONNECTED) |
+                                        .bridge.management_room_text.welcome_unconnected = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_UNCONNECTED) |
+                                        .bridge.management_room_text.additional_help = env(SIGNAL_MANAGEMENT_ROOM_TEXT_ADDITIONAL_HELP) |
+                                        .bridge.management_multiple_messages = env(SIGNAL_MANAGEMENT_ROOM_MULTIPLE_MESSAGES) |
+                                    ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${SIGNAL_PERMISSIONS_RELAY}" ] ; then
+            signalrelays=$(echo "${SIGNAL_PERMISSIONS_RELAY}" | tr "," "\n")
+            for signalrelay in $signalrelays; do
+                if [ "$signalrelay" = "*" ] ; then
+                    export SIGNALRELAY="PLACEHOLDERASTERISK"
+                else
+                    export SIGNALRELAY=$signalrelay
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[  "'$(echo ${SIGNALRELAY})'" ]+= "relay"
+                                            ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${SIGNAL_PERMISSIONS_ADMIN}" ] ; then
+            signaladmins=$(echo "${SIGNAL_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for signaladmin in $signaladmins; do
+                if [ "$signaladmin" = "*" ] ; then
+                    export SIGNALADMIN="PLACEHOLDERASTERISK"
+                else
+                    export SIGNALADMIN=$signaladmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${SIGNALADMIN})'" ] += "admin"
+                                            ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${SIGNAL_PERMISSIONS_USER}" ] ; then
+            signalusers=$(echo "${SIGNAL_PERMISSIONS_USER}" | tr "," "\n")
+            for signaluser in $disusers; do
+                if [ "$signaluser" = "*" ] ; then
+                    export SIGNALUSER="PLACEHOLDERASTERISK"
+                else
+                    export SIGNALUSER=$signaluser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(SIGNALUSER)] += "user"
+                                            ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+        fi
+
+        case "${SIGNAL_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_signal "${SIGNAL_LOG_PATH}"/"${SIGNAL_LOG_FILE}" matrix matrix bridge_signal
+                export SIGNAL_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export SIGNAL_LOG_TYPE="console"
+            ;;
+            "file" )
+                create_logrotate bridge_signal "${SIGNAL_LOG_PATH}"/"${SIGNAL_LOG_FILE}" matrix matrix bridge_signal
+                export SIGNAL_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i   '
+                                        .logging.version = 1 |
+                                        .logging.handlers.file.class = "logging.FileHandler" |
+                                        .logging.handlers.file.filename = "'$(echo "${SIGNAL_LOG_PATH}/${SIGNAL_LOG_FILE}")'" |
+                                        del(.logging.handlers.file.backupCount) |
+                                        del(.logging.handlers.file.maxBytes) |
+                                        .logging.loggers.mau.level = env(SIGNAL_LOG_LEVEL_MAU) |
+                                        .logging.loggers.aiohttp.level = env(SIGNAL_LOG_LEVEL_AIOHTTP) |
+                                        .logging.root.level = env(SIGNAL_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${SIGNAL_LOG_TYPE,,//,/\",\"}")'" ]
+                                    ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+
+        if [ ! -f "${SIGNAL_REGISTRATION_PATH}"/"${SIGNAL_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_signal] Didn't find a registration file. Generating to '${SIGNAL_REGISTRATION_PATH}/${SIGNAL_REGISTRATION_FILE}'"
+            signal_generate_registration=true
+        elif var_true "${SIGNAL_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_signal] Regenerating registration file to '${SIGNAL_REGISTRATION_PATH}/${SIGNAL_REGISTRATION_FILE}'"
+            signal_generate_registration=true
+        elif var_true "${signal_force_registration}" ; then
+            print_notice "[configure_signal] Something has changed  - Force generating registration file to '${SIGNAL_REGISTRATION_PATH}/${SIGNAL_REGISTRATION_FILE}'"
+            signal_generate_registration=true
+        fi
+
+        if var_true "${signal_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${SIGNAL_REGISTRATION_PATH}"
             s6-setuidgid matrix python3 -m mautrix_signal \
-                                                    -g \
-                                                    -c "${SIGNAL_CONFIG_PATH}"/${SIGNAL_CONFIG_FILE} \
-                                                    -r "${SIGNAL_DATA_PATH}"/"${SIGNAL_REGISTRATION_FILE}" \
-                                                    || exit $?
-
-            print_notice "[configure_signal] Didn't find a registration file. Autogenerating to '${SIGNAL_DATA_PATH}/${SIGNAL_REGISTRATION_FILE}'"
-            print_notice "[configure_signal] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+                                                        -g \
+                                                        -c "${SIGNAL_CONFIG_PATH}"/${SIGNAL_CONFIG_FILE} \
+                                                        -r "${SIGNAL_REGISTRATION_PATH}"/"${SIGNAL_REGISTRATION_FILE}" \
+                                                        || exit $?
+            print_notice "[configure_signal] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
     fi
 }
 
 configure_slack() {
     if [ "${SETUP_TYPE,,}" = "auto" ] ; then
-        if [ -f "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}" ]; then
-            sudo matrix cp -R /assets/config/slack/example.config.yml "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+        set -a
+        source /assets/defaults/bridge_slack
+        set +a
+        print_debug "[configure_slack]"
+
+        if [ ! -d "${SLACK_CONFIG_PATH}" ] ; then
+            mkdir -p "${SLACK_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${SLACK_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${SLACK_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${SLACK_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${SLACK_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${SLACK_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${SLACK_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${SLACK_LOG_PATH}" ] ; then
+            mkdir -p "${SLACK_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${SLACK_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${SLACK_LOG_PATH}" ; fi
+
+        if [ $(stat -c %U "${DATA_PATH}") != "matrix" ] ; then chown matrix:matrix "${DATA_PATH}" ; fi
+
+        case "${SLACK_DB_TYPE,,}" in
+            postgres* )
+                sanity_var SLACK_DB_USER "DB Username for Slack"
+                sanity_var SLACK_DB_PASS "DB Password for Slack"
+                sanity_var SLACK_DB_HOST "DB Host for Slack"
+                sanity_var SLACK_DB_NAME "DB Name for Slack"
+                counter=0
+                export PGPASSWORD=${SLACK_DB_PASS}
+                until pg_isready --dbname="${SLACK_DB_NAME}" --host="${SLACK_DB_HOST}" --port="${SLACK_DB_PORT}" --username="${SLACK_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${SLACK_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                if var_true "${SLACK_DB_ENABLE_TLS}" ; then
+                    slack_db_tls="?sslmode=enable"
+                else
+                    slack_db_tls="?sslmode=disable"
+                fi
+                export SLACK_DB_TYPE=postgres
+                export SLACK_DB_STRING=${SLACK_DB_STRING:-"postgres://${SLACK_DB_USER}:${SLACK_DB_PASS}@${SLACK_DB_HOST}:${SLACK_DB_PORT}/${SLACK_DB_NAME}${slack_db_tls}"}
+            ;;
+            sqlite* )
+                if [ ! -d "${SLACK_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${SLACK_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${SLACK_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${SLACK_DB_SQLITE_PATH}" ; fi
+                export SLACK_DB_TYPE=sqlite-fk-wal
+                export SLACK_DB_STRING=${SLACK_DB_STRING:-"file://${SLACK_DB_SQLITE_PATH}/${SLACK_DB_SQLITE_FILE}?_txlock=immediate"}
+            ;;
+        esac
+
+        if [ ! -f "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/slack/example.config.yaml "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
         fi
 
-        # /opt/mautrix-discord is read-only, so disable file logging if it's pointing there.
-        #if [[ "$(yq e '.logging.directory' /data/config.yaml)" == "./logs" ]]; then
-        #    yq -I4 e -i '.logging.file_name_format = ""' /data/config.yaml
-        #fi
-        ## Do some config here
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(SLACK_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(SLACK_HOMESERVER_DOMAIN) |
+                                        .homeserver.software = env(SLACK_HOMESERVER_SOFTWARE) |
+                                        .homeserver.status_endpoint = env(SLACK_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(SLACK_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(SLACK_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
 
-        create_logrotate bridge_slack "${SLACK_LOG_PATH}"/"${SLACK_LOG_FILE}" matrix matrix
+        s6-setuidgid matrix yq -i   '
+                                        .appservice.address = env(SLACK_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(SLACK_LISTEN_IP) |
+                                        .appservice.port = env(SLACK_LISTEN_PORT) |
+                                        .appservice.database.type = env(SLACK_DB_TYPE) |
+                                        .appservice.database.uri = env(SLACK_DB_STRING) |
+                                        .appservice.database.max_open_conns = env(SLACK_DB_CONNECTIONS_MAX_OPEN) |
+                                        .appservice.database.max_idle_conns = env(SLACK_DB_CONNECTIONS_MAX_IDLE) |
+                                        .appservice.database.max_conn_idle_time = env(SLACK_DB_CONNECTIONS_MAX_IDLE_LIFETIME) |
+                                        .appservice.database.max_conn_lifetime = env(SLACK_DB_CONNECTIONS_MAX_LIFETIME) |
+                                        .appservice.id = env(SLACK_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(SLACK_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(SLACK_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(SLACK_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(SLACK_ENABLE_EPHEMERAL_EVENTS) |
+                                        .appservice.async_transactions = env(SLACK_ENABLE_ASYNC_TRANSACTIONS)
+                                    ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
 
-        if [ ! -f "${SLACK_DATA_PATH}"/"${SLACK_REGISTRATION_FILE}" ]; then
-            s6-setuidgid matrix mkdir -p "${SLACK_DATA_PATH}"
-            s6-setuidgid matrix /usr/bin/mautrix-slack \
-                                                -g \
-                                                -c /data/config.yaml \
-                                                -r "${SLACK_DATA_PATH}"/"${SLACK_REGISTRATION_FILE}"
 
-            print_notice "[configure_slack] Didn't find a registration file. Autogenerating to '${SLACK_DATA_PATH}/${SLACK_REGISTRATION_FILE}'"
-            print_notice "[configure_slack] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+        if [ -f "${SLACK_REGISTRATION_PATH}"/"${SLACK_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}" && [ -z "${SLACK_AS_TOKEN}" ] ; then
+            print_debug "[configure_slack] Setting as_token in configuration from previously generated registration file"
+            export TOI_SLACK_AS_TOKEN=$(yq '.as_token' "${SLACK_REGISTRATION_PATH}"/"${SLACK_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_SLACK_AS_TOKEN)
+                                        ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+            slackastokenskip=true
+        elif [ -n "${SLACK_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"; then
+            print_notice "You've supplied 'SLACK_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${SLACK_AS_TOKEN}" ] ; then
+            print_debug "[configure_slack] Updating SLACK_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(SLACK_AS_TOKEN)
+                                        ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+        fi
+
+        if [ -f "${SLACK_REGISTRATION_PATH}"/"${SLACK_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}" && [ -z "${SLACK_HS_TOKEN}" ] ; then
+            print_debug "[configure_slack] Setting hs_token in configuration from previously generated registration file"
+            export TOI_SLACK_HS_TOKEN=$(yq '.hs_token' "${SLACK_REGISTRATION_PATH}"/"${SLACK_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_SLACK_HS_TOKEN)
+                                        ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+            slackhstokenskip=true
+        elif [ -n "${SLACK_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"; then
+            print_notice "You've supplied 'SLACK_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${SLACK_HS_TOKEN}" ] ; then
+            print_debug "[configure_slack] Updating SLACK_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(SLACK_HS_TOKEN)
+                                        ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .metrics.enabled = env(SLACK_ENABLE_METRICS) |
+                                        .metrics.listen = "'$(echo ${SLACK_METRICS_LISTEN_IP}:${SLACK_METRICS_LISTEN_PORT})'"
+                                    ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .segment_key = env(SLACK_SEGMENT_API_KEY)
+                                    ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .slack.os_name = env(SLACK_OS_NAME) |
+                                        .slack.browser_name = env(SLACK_BROWSER_NAME)
+                                    ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .bridge.username_template = strenv(SLACK_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = strenv(SLACK_TEMPLATE_DISPLAYNAME) |
+                                        .bridge.personal_filtering_spaces = env(SLACK_PERSONAL_FILTERING_SPACES) |
+                                        .bridge.delivery_receipts = env(SLACK_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.message_status_events = env(SLACK_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.message_error_notices = env(SLACK_ENABLE_MESSAGE_ERROR_NOTICES) |
+                                        .bridge.call_start_notices = env(SLACK_ENABLE_CALL_START_NOTICES) |
+                                        .bridge.identity_change_notices = env(SLACK_ENABLE_IDENTITY_CHANGE_NOTICES) |
+                                        .bridge.portal_message_buffer = env(SLACK_PORTAL_MESSAGE_BUFFER) |
+                                        .bridge.federate_rooms = env(SLACK_FEDERATE_ROOMS) |
+                                        .bridge.command_prefix = "'$(echo ${SLACK_COMMAND_PREFIX})'" |
+                                        .bridge.encryption.allow = env(SLACK_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(SLACK_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(SLACK_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(SLACK_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(SLACK_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(SLACK_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(SLACK_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(SLACK_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(SLACK_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(SLACK_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(SLACK_ENCRYPTION_ROTATION_MESSAGES)
+                                    ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${SLACK_PERMISSIONS_RELAY}" ] ; then
+            slackrelays=$(echo "${SLACK_PERMISSIONS_RELAY}" | tr "," "\n")
+            for slackrelay in $slackrelays; do
+                if [ "$slackrelay" = "*" ] ; then
+                    export SLACKRELAY="PLACEHOLDERASTERISK"
+                else
+                    export SLACKRELAY=$warelay
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${SLACKRELAY})'" ]+= "relay"
+                                            ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${SLACK_PERMISSIONS_ADMIN}" ] ; then
+            slackadmins=$(echo "${SLACK_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for slackadmin in $slackadmins; do
+                if [ "$slackadmin" = "*" ] ; then
+                    export SLACKADMIN="PLACEHOLDERASTERISK"
+                else
+                    export SLACKADMIN=$waadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${SLACKADMIN})'" ] += "admin"
+                                            ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${SLACK_PERMISSIONS_USER}" ] ; then
+            slackusers=$(echo "${SLACK_PERMISSIONS_USER}" | tr "," "\n")
+            for slackuser in $slackusers; do
+                if [ "$slackuser" = "*" ] ; then
+                    export SLACKUSER="PLACEHOLDERASTERISK"
+                else
+                    export SLACKUSER=$wauser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(SLACKUSER)] += "user"
+                                            ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+        fi
+
+        case "${SLACK_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_slack "${SLACK_LOG_PATH}"/"${SLACK_LOG_FILE}" matrix matrix bridge_slack
+                export SLACK_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export SLACK_LOG_TYPE="console"
+                export SLACK_LOG_FILE="null"
+            ;;
+            "file" )
+                create_logrotate bridge_slack "${SLACK_LOG_PATH}"/"${SLACK_LOG_FILE}" matrix matrix bridge_slack
+                export SLACK_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i   '
+                                        .logging.directory = "'$(echo "${SLACK_LOG_PATH}")'" |
+                                        .logging.file_name_format = env(SLACK_LOG_FILE) |
+                                        .logging.print_level = env(SLACK_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${SLACK_LOG_TYPE,,//,/\",\"}")'" ] |
+                                        .logging.timestamp_format = "2006-01-02 15:04:05"
+                                    ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+
+        create_logrotate bridge_slack "${SLACK_LOG_PATH}"/"${SLACK_LOG_FILE}" matrix matrix bridge_slack
+
+        if [ ! -f "${SLACK_REGISTRATION_PATH}"/"${SLACK_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_slack] Didn't find a registration file. Generating to '${SLACK_REGISTRATION_PATH}/${SLACK_REGISTRATION_FILE}'"
+            wa_generate_registration=true
+        elif var_true "${SLACK_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_slack] Regenerating registration file to '${SLACK_REGISTRATION_PATH}/${SLACK_REGISTRATION_FILE}'"
+            wa_generate_registration=true
+        elif var_true "${wa_force_registration}" ; then
+            print_notice "[configure_slack] Something has changed  - Force generating registration file to '${SLACK_REGISTRATION_PATH}/${SLACK_REGISTRATION_FILE}'"
+            wa_generate_registration=true
+        fi
+
+        if var_true "${wa_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${SLACK_REGISTRATION_PATH}"
+            silent s6-setuidgid matrix mautrix-slack \
+                                                    -g \
+                                                    -c "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}" \
+                                                    -r "${SLACK_REGISTRATION_PATH}"/"${SLACK_REGISTRATION_FILE}" \
+                                                    || exit $?
+            print_notice "[configure_slack] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
     fi
 }
 
-configure_twitter() {
+configure_telegram() {
     if [ "${SETUP_TYPE,,}" = "auto" ] ; then
-        if [ -f "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}" ]; then
-            sudo matrix cp -R /assets/config/twitter/example.config.yml "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        set -a
+        source /assets/defaults/bridge_telegram
+        set +a
+        print_debug "[configure_telegram]"
+        if [ ! -d "${TELEGRAM_CONFIG_PATH}" ] ; then
+            mkdir -p "${TELEGRAM_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${TELEGRAM_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${TELEGRAM_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${TELEGRAM_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${TELEGRAM_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${TELEGRAM_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${TELEGRAM_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${TELEGRAM_LOG_PATH}" ] ; then
+            mkdir -p "${TELEGRAM_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${TELEGRAM_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${TELEGRAM_LOG_PATH}" ; fi
+
+        case "${TELEGRAM_DB_TYPE,,}" in
+            postgres* )
+                sanity_var TELEGRAM_DB_USER "DB Username for Telegram"
+                sanity_var TELEGRAM_DB_PASS "DB Password for Telegram"
+                sanity_var TELEGRAM_DB_HOST "DB Host for Telegram"
+                sanity_var TELEGRAM_DB_NAME "DB Name for Telegram"
+                counter=0
+                export PGPASSWORD=${TELEGRAM_DB_PASS}
+                until pg_isready --dbname="${TELEGRAM_DB_NAME}" --host="${TELEGRAM_DB_HOST}" --port="${TELEGRAM_DB_PORT}" --username="${TELEGRAM_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${TELEGRAM_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                export TELEGRAM_DB_STRING=${TELEGRAM_DB_STRING:-"postgres://${TELEGRAM_DB_USER}:${TELEGRAM_DB_PASS}@${TELEGRAM_DB_HOST}:${TELEGRAM_DB_PORT}/${TELEGRAM_DB_NAME}"}
+            set +x
+            ;;
+            sqlite* )
+                if [ ! -d "${TELEGRAM_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${TELEGRAM_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${TELEGRAM_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${TELEGRAM_DB_SQLITE_PATH}" ; fi
+
+                export TELEGRAM_DB_STRING=${TELEGRAM_DB_STRING:-"sqlite://${TELEGRAM_DB_SQLITE_PATH}/${TELEGRAM_DB_SQLITE_FILE}"}
+            ;;
+        esac
+
+        if [ ! -f "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/telegram/example.config.yaml "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
         fi
 
-#        if [[ "$(yq e '.logging.handlers.file.filename' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}")" == "./mautrix-twitter.log" ]]; then
-#            yq -I4 e -i 'del(.logging.root.handlers[] | select(. == "file"))' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
-#            yq -I4 e -i 'del(.logging.handlers.file)' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
-#        fi
-        ## Do some config here
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(TELEGRAM_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(TELEGRAM_HOMESERVER_DOMAIN) |
+                                        .homeserver.verify_ssl = env(TELEGRAM_HOMESERVER_TLS_VERIFY) |
+                                        .homeserver.software = env(TELEGRAM_HOMESERVER_SOFTWARE) |
+                                        .homeserver.http_retry_count = env(TELEGRAM_HOMESERVER_HTTP_RETRY_COUNT) |
+                                        .homeserver.status_endpoint = env(TELEGRAM_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(TELEGRAM_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(TELEGRAM_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
 
-        create_logrotate bridge_twitter "${TWITTER_LOG_PATH}"/"${TWITTER_LOG_FILE}" matrix matrix
+        s6-setuidgid matrix yq -i   '
+                                        .appservice.address = env(TELEGRAM_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(TELEGRAM_LISTEN_IP) |
+                                        .appservice.port = env(TELEGRAM_LISTEN_PORT) |
+                                        .appservice.max_body_size = env(TELEGRAM_MAX_BODY_SIZE) |
+                                        .appservice.database = env(TELEGRAM_DB_STRING) |
+                                        .appservice.database_opts.min_size = env(TELEGRAM_DB_MIN_SIZE) |
+                                        .appservice.database_opts.max_size = env(TELEGRAM_DB_MAX_SIZE) |
+                                        .appservice.id = env(TELEGRAM_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(TELEGRAM_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(TELEGRAM_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(TELEGRAM_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(TELEGRAM_ENABLE_EPHEMERAL_EVENTS)
+                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
 
-        if [ ! -f "${TWITTER_DATA_PATH}"/"${TWITTER_REGISTRATION_FILE}" ]; then
-            s6-setuidgid matrix mkdir -p "${TWITTER_DATA_PATH}"
+
+        if [ -f "${TELEGRAM_REGISTRATION_PATH}"/"${TELEGRAM_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}" && [ -z "${TELEGRAM_AS_TOKEN}" ] ; then
+            print_debug "[configure_telegram] Setting as_token in configuration from previously generated registration file"
+            export TOI_TELEGRAM_AS_TOKEN=$(yq '.as_token' "${TELEGRAM_REGISTRATION_PATH}"/"${TELEGRAM_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_TELEGRAM_AS_TOKEN)
+                                        ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+            fbastokenskip=true
+        elif [ -n "${TELEGRAM_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"; then
+            print_notice "You've supplied 'TELEGRAM_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${TELEGRAM_AS_TOKEN}" ] ; then
+            print_debug "[configure_telegram] Updating TELEGRAM_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TELEGRAM_AS_TOKEN)
+                                        ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+        fi
+
+        if [ -f "${TELEGRAM_REGISTRATION_PATH}"/"${TELEGRAM_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}" && [ -z "${TELEGRAM_HS_TOKEN}" ] ; then
+            print_debug "[configure_telegram] Setting hs_token in configuration from previously generated registration file"
+            export TOI_TELEGRAM_HS_TOKEN=$(yq '.hs_token' "${TELEGRAM_REGISTRATION_PATH}"/"${TELEGRAM_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_TELEGRAM_HS_TOKEN)
+                                        ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+            fbhstokenskip=true
+        elif [ -n "${TELEGRAM_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"; then
+            print_notice "You've supplied 'TELEGRAM_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${TELEGRAM_HS_TOKEN}" ] ; then
+            print_debug "[configure_telegram] Updating TELEGRAM_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TELEGRAM_HS_TOKEN)
+                                        ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .appservice.public.enabled = env(TELEGRAM_ENABLE_PUBLIC) |
+                                        .appservice.public.prefix = env(TELEGRAM_PUBLIC_PREFIX) |
+                                        .appservice.public.external = env(TELEGRAM_PUBLIC_EXTERNAL_URL) |
+                                        .appservice.public.shared_secret = env(TELEGRAM_PUBLIC_SHARED_SECRET) |
+                                        .appservice.public.allow_matrix_login = env(TELEGRAM_ALLOW_MATRIX_LOGIN) |
+                                        .appservice.public.segment_key = env(TELEGRAM_SEGMENT_API_KEY)
+                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .metrics.enabled = env(TELEGRAM_ENABLE_METRICS) |
+                                        .metrics.listen_port = env(TELEGRAM_METRICS_LISTEN_PORT)
+                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .manhole.enabled = env(TELEGRAM_ENABLE_MANHOLE) |
+                                        .manhole.path = env(TELEGRAM_MANHOLE_SOCKET) |
+                                        .manhole.whitelist = [ "'$(echo ${TELEGRAM_MANHOLE_WHITELIST//,/\",\"})'" ]
+                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .bridge.username_template = strenv(TELEGRAM_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = strenv(TELEGRAM_TEMPLATE_DISPLAYNAME) |
+                                        .bridge.displayname_preference = [ "'$(echo ${TELEGRAM_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
+                                        .bridge.command_prefix = "'$(echo ${TELEGRAM_COMMAND_PREFIX})'" |
+                                        .bridge.invite_own_puppet_to_pm = env(TELEGRAM_INVITE_OWN_PUPPET_TO_PM) |
+                                        .bridge.sync_direct_chat_list = env(TELEGRAM_SYNC_DIRECT_CHAT_LIST) |
+                                        .bridge.presence_from_facebook = env(TELEGRAM_BRIDGE_PRESENCE) |
+                                        .bridge.update_avatar_initial_sync = env(TELEGRAM_SYNC_UPDATE_AVATAR) |
+                                        .bridge.delivery_receipts = env(TELEGRAM_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.delivery_error_reports = env(TELEGRAM_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                        .bridge.message_status_events = env(TELEGRAM_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.allow_invites = env(TELEGRAM_ALLOW_INVITES) |
+                                        .bridge.federate_rooms = env(TELEGRAM_FEDERATE_ROOMS) |
+                                        .bridge.backfill.enable = env(TELEGRAM_BACKFILL_ENABLE) |
+                                        .bridge.backfill.msc2716 = env(TELEGRAM_BACKFILL_ENABLE_MSC2716) |
+                                        .bridge.backfill.max_conversations = env(TELEGRAM_BACKFILL_MAX_CONVERSATIONS) |
+                                        .bridge.backfill.min_sync_thread_delay = env(TELEGRAM_BACKFILL_SYNC_THREAD_DELAY) |
+                                        .bridge.backfill.unread_hours_threshold = env(TELEGRAM_BACKFILL_UNREAD_HOURS_THRESHOLD) |
+                                        .bridge.periodic_reconnect.interval = env(TELEGRAM_PERIODIC_RECONNECT_INTERVAL) |
+                                        .bridge.periodic_reconnect.refresh = env(TELEGRAM_PERIODIC_RECONNECT_MODE) |
+                                        .bridge.periodic_reconnect.always = env(TELEGRAM_PERIODIC_RECONNECT_ALWAYS) |
+                                        .bridge.periodic_reconnect.min_connected_time = env(TELEGRAM_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
+                                        .bridge.resync_max_disconnected_time = env(TELEGRAM_RESYNC_MAX_DISCONNECTED_TIME) |
+                                        .bridge.sync_on_startup = env(TELEGRAM_SYNC_ON_STARTUP) |
+                                        .bridge.temporary_disconnect_notices = env(TELEGRAM_TEMPORARY_DISCONNECT_NOTICES) |
+                                        .bridge.on_reconnection_fail.action = env(TELEGRAM_RECONNECTION_FAIL_ACTION) |
+                                        .bridge.on_reconnection_fail.wait_for = env(TELEGRAM_RECONNECTION_FAIL_WAIT) |
+                                        .bridge.disable_bridge_notices = env(TELEGRAM_DISABLE_BRIDGE_NOTICES) |
+                                        .bridge.resend_bridge_info = env(TELEGRAM_RESEND_BRIDGE_INFO) |
+                                        .bridge.mute_bridging = env(TELEGRAM_MUTE_BRIDGING) |
+                                        .bridge.tag_only_on_create = env(TELEGRAM_TAG_ONLY_ON_CREATE) |
+                                        .bridge.sandbox_media_download = env(TELEGRAM_SANDBOX_MEDIA_DOWNLOAD) |
+                                        .bridge.get_proxy_api_url = env(TELEGRAM_GET_PROXY_API_URL) |
+                                        .bridge.encryption.allow = env(TELEGRAM_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(TELEGRAM_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(TELEGRAM_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(TELEGRAM_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(TELEGRAM_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(TELEGRAM_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(TELEGRAM_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(TELEGRAM_ENCRYPTION_ROTATION_MESSAGES)
+                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${TELEGRAM_PERMISSIONS_RELAY}" ] ; then
+            telegramrelays=$(echo "${TELEGRAM_PERMISSIONS_RELAY}" | tr "," "\n")
+            for telegramrelay in $telegramrelays; do
+                if [ "$telegramrelay" = "*" ] ; then
+                    export TELEGRAMRELAY="PLACEHOLDERASTERISK"
+                else
+                    export TELEGRAMRELAY=$telegramrelay
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[  "'$(echo ${TELEGRAMRELAY})'" ]+= "relay"
+                                            ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${TELEGRAM_PERMISSIONS_ADMIN}" ] ; then
+            telegramadmins=$(echo "${TELEGRAM_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for telegramadmin in $telegramadmins; do
+                if [ "$telegramadmin" = "*" ] ; then
+                    export TELEGRAMADMIN="PLACEHOLDERASTERISK"
+                else
+                    export TELEGRAMADMIN=$telegramadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${TELEGRAMADMIN})'" ] += "admin"
+                                            ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${TELEGRAM_PERMISSIONS_USER}" ] ; then
+            telegramusers=$(echo "${TELEGRAM_PERMISSIONS_USER}" | tr "," "\n")
+            for telegramuser in $disusers; do
+                if [ "$telegramuser" = "*" ] ; then
+                    export TELEGRAMUSER="PLACEHOLDERASTERISK"
+                else
+                    export TELEGRAMUSER=$telegramuser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(TELEGRAMUSER)] += "user"
+                                            ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+        fi
+
+        case "${TELEGRAM_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_telegram "${TELEGRAM_LOG_PATH}"/"${TELEGRAM_LOG_FILE}" matrix matrix bridge_telegram
+                export TELEGRAM_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export TELEGRAM_LOG_TYPE="console"
+            ;;
+            "file" )
+                create_logrotate bridge_telegram "${TELEGRAM_LOG_PATH}"/"${TELEGRAM_LOG_FILE}" matrix matrix bridge_telegram
+                export TELEGRAM_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i   '
+                                        .logging.version = 1 |
+                                        .logging.handlers.file.class = "logging.FileHandler" |
+                                        .logging.handlers.file.filename = "'$(echo "${TELEGRAM_LOG_PATH}/${TELEGRAM_LOG_FILE}")'" |
+                                        del(.logging.handlers.file.backupCount) |
+                                        del(.logging.handlers.file.maxBytes) |
+                                        .logging.loggers.mau.level = env(TELEGRAM_LOG_LEVEL_MAU) |
+                                        .logging.loggers.maufbapi.level = env(TELEGRAM_LOG_LEVEL_MAUFBAPI) |
+                                        .logging.loggers.paho.level = env(TELEGRAM_LOG_LEVEL_PAHO) |
+                                        .logging.loggers.aiohttp.level = env(TELEGRAM_LOG_LEVEL_AIOHTTP) |
+                                        .logging.root.level = env(TELEGRAM_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${TELEGRAM_LOG_TYPE,,//,/\",\"}")'" ]
+                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+
+        if [ ! -f "${TELEGRAM_REGISTRATION_PATH}"/"${TELEGRAM_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_telegram] Didn't find a registration file. Generating to '${TELEGRAM_REGISTRATION_PATH}/${TELEGRAM_REGISTRATION_FILE}'"
+            telegram_generate_registration=true
+        elif var_true "${TELEGRAM_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_telegram] Regenerating registration file to '${TELEGRAM_REGISTRATION_PATH}/${TELEGRAM_REGISTRATION_FILE}'"
+            telegram_generate_registration=true
+        elif var_true "${telegram_force_registration}" ; then
+            print_notice "[configure_telegram] Something has changed  - Force generating registration file to '${TELEGRAM_REGISTRATION_PATH}/${TELEGRAM_REGISTRATION_FILE}'"
+            telegram_generate_registration=true
+        fi
+
+        if var_true "${telegram_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${TELEGRAM_REGISTRATION_PATH}"
+            s6-setuidgid matrix python3 -m mautrix_telegram \
+                                                        -g \
+                                                        -c "${TELEGRAM_CONFIG_PATH}"/${TELEGRAM_CONFIG_FILE} \
+                                                        -r "${TELEGRAM_REGISTRATION_PATH}"/"${TELEGRAM_REGISTRATION_FILE}" \
+                                                        || exit $?
+            print_notice "[configure_telegram] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
+        fi
+    fi
+}
+configure_twitter() {
+        if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        set -a
+        source /assets/defaults/bridge_twitter
+        set +a
+        print_debug "[configure_twitter]"
+        if [ ! -d "${TWITTER_CONFIG_PATH}" ] ; then
+            mkdir -p "${TWITTER_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${TWITTER_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${TWITTER_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${TWITTER_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${TWITTER_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${TWITTER_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${TWITTER_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${TWITTER_LOG_PATH}" ] ; then
+            mkdir -p "${TWITTER_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${TWITTER_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${TWITTER_LOG_PATH}" ; fi
+
+        case "${TWITTER_DB_TYPE,,}" in
+            postgres* )
+                sanity_var TWITTER_DB_USER "DB Username for Twitter"
+                sanity_var TWITTER_DB_PASS "DB Password for Twitter"
+                sanity_var TWITTER_DB_HOST "DB Host for Twitter"
+                sanity_var TWITTER_DB_NAME "DB Name for Twitter"
+                counter=0
+                export PGPASSWORD=${TWITTER_DB_PASS}
+                until pg_isready --dbname="${TWITTER_DB_NAME}" --host="${TWITTER_DB_HOST}" --port="${TWITTER_DB_PORT}" --username="${TWITTER_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${TWITTER_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                export TWITTER_DB_STRING=${TWITTER_DB_STRING:-"postgres://${TWITTER_DB_USER}:${TWITTER_DB_PASS}@${TWITTER_DB_HOST}:${TWITTER_DB_PORT}/${TWITTER_DB_NAME}"}
+            set +x
+            ;;
+            sqlite* )
+                if [ ! -d "${TWITTER_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${TWITTER_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${TWITTER_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${TWITTER_DB_SQLITE_PATH}" ; fi
+
+                export TWITTER_DB_STRING=${TWITTER_DB_STRING:-"sqlite://${TWITTER_DB_SQLITE_PATH}/${TWITTER_DB_SQLITE_FILE}"}
+            ;;
+        esac
+
+        if [ ! -f "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/twitter/example.config.yaml "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(TWITTER_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(TWITTER_HOMESERVER_DOMAIN) |
+                                        .homeserver.verify_ssl = env(TWITTER_HOMESERVER_TLS_VERIFY) |
+                                        .homeserver.software = env(TWITTER_HOMESERVER_SOFTWARE) |
+                                        .homeserver.http_retry_count = env(TWITTER_HOMESERVER_HTTP_RETRY_COUNT) |
+                                        .homeserver.status_endpoint = env(TWITTER_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(TWITTER_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(TWITTER_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .appservice.address = env(TWITTER_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(TWITTER_LISTEN_IP) |
+                                        .appservice.port = env(TWITTER_LISTEN_PORT) |
+                                        .appservice.max_body_size = env(TWITTER_MAX_BODY_SIZE) |
+                                        .appservice.database = env(TWITTER_DB_STRING) |
+                                        .appservice.database_opts.min_size = env(TWITTER_DB_MIN_SIZE) |
+                                        .appservice.database_opts.max_size = env(TWITTER_DB_MAX_SIZE) |
+                                        .appservice.provisioning.enabled = env(TWITTER_PROVISIONING_ENABLE) |
+                                        .appservice.provisioning.prefix = env(TWITTER_PROVISIONING_PREFIX) |
+                                        .appservice.provisioning.segment_key = env(TWITTER_PROVISIONING_SEGMENT_KEY) |
+                                        .appservice.id = env(TWITTER_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(TWITTER_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(TWITTER_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(TWITTER_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(TWITTER_ENABLE_EPHEMERAL_EVENTS)
+                                    ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+
+
+        if [ -f "${TWITTER_REGISTRATION_PATH}"/"${TWITTER_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}" && [ -z "${TWITTER_AS_TOKEN}" ] ; then
+            print_debug "[configure_twitter] Setting as_token in configuration from previously generated registration file"
+            export TOI_TWITTER_AS_TOKEN=$(yq '.as_token' "${TWITTER_REGISTRATION_PATH}"/"${TWITTER_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_TWITTER_AS_TOKEN)
+                                        ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+            twastokenskip=true
+        elif [ -n "${TWITTER_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"; then
+            print_notice "You've supplied 'TWITTER_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${TWITTER_AS_TOKEN}" ] ; then
+            print_debug "[configure_twitter] Updating TWITTER_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TWITTER_AS_TOKEN)
+                                        ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        fi
+
+        if [ -f "${TWITTER_REGISTRATION_PATH}"/"${TWITTER_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}" && [ -z "${TWITTER_HS_TOKEN}" ] ; then
+            print_debug "[configure_twitter] Setting hs_token in configuration from previously generated registration file"
+            export TOI_TWITTER_HS_TOKEN=$(yq '.hs_token' "${TWITTER_REGISTRATION_PATH}"/"${TWITTER_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_TWITTER_HS_TOKEN)
+                                        ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+            twhstokenskip=true
+        elif [ -n "${TWITTER_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"; then
+            print_notice "You've supplied 'TWITTER_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${TWITTER_HS_TOKEN}" ] ; then
+            print_debug "[configure_twitter] Updating TWITTER_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TWITTER_HS_TOKEN)
+                                        ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        fi
+
+
+        s6-setuidgid matrix yq -i   '
+                                        .metrics.enabled = env(TWITTER_ENABLE_METRICS) |
+                                        .metrics.listen_port = env(TWITTER_METRICS_LISTEN_PORT)
+                                    ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .manhole.enabled = env(TWITTER_ENABLE_MANHOLE) |
+                                        .manhole.path = env(TWITTER_MANHOLE_SOCKET) |
+                                        .manhole.whitelist = [ "'$(echo ${TWITTER_MANHOLE_WHITELIST//,/\",\"})'" ]
+                                    ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .bridge.username_template = strenv(TWITTER_TEMPLATE_USERNAME) |
+                                        .bridge.displayname_template = strenv(TWITTER_TEMPLATE_DISPLAYNAME) |
+                                        .bridge.displayname_preference = [ "'$(echo ${TWITTER_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
+                                        .bridge.command_prefix = "'$(echo ${TWITTER_COMMAND_PREFIX})'" |
+                                        .bridge.invite_own_puppet_to_pm = env(TWITTER_INVITE_OWN_PUPPET_TO_PM) |
+                                        .bridge.sync_direct_chat_list = env(TWITTER_SYNC_DIRECT_CHAT_LIST) |
+                                        .bridge.presence_from_twitter = env(TWITTER_BRIDGE_PRESENCE) |
+                                        .bridge.update_avatar_initial_sync = env(TWITTER_SYNC_UPDATE_AVATAR) |
+                                        .bridge.delivery_receipts = env(TWITTER_ENABLE_DELIVERY_RECEIPTS) |
+                                        .bridge.delivery_error_reports = env(TWITTER_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                        .bridge.message_status_events = env(TWITTER_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                        .bridge.allow_invites = env(TWITTER_ALLOW_INVITES) |
+                                        .bridge.federate_rooms = env(TWITTER_FEDERATE_ROOMS) |
+                                        .bridge.backfill.enable = env(TWITTER_BACKFILL_ENABLE) |
+                                        .bridge.backfill.msc2716 = env(TWITTER_BACKFILL_ENABLE_MSC2716) |
+                                        .bridge.backfill.max_conversations = env(TWITTER_BACKFILL_MAX_CONVERSATIONS) |
+                                        .bridge.backfill.min_sync_thread_delay = env(TWITTER_BACKFILL_SYNC_THREAD_DELAY) |
+                                        .bridge.backfill.unread_hours_threshold = env(TWITTER_BACKFILL_UNREAD_HOURS_THRESHOLD) |
+                                        .bridge.periodic_reconnect.interval = env(TWITTER_PERIODIC_RECONNECT_INTERVAL) |
+                                        .bridge.periodic_reconnect.refresh = env(TWITTER_PERIODIC_RECONNECT_MODE) |
+                                        .bridge.periodic_reconnect.always = env(TWITTER_PERIODIC_RECONNECT_ALWAYS) |
+                                        .bridge.periodic_reconnect.min_connected_time = env(TWITTER_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
+                                        .bridge.resync_max_disconnected_time = env(TWITTER_RESYNC_MAX_DISCONNECTED_TIME) |
+                                        .bridge.sync_on_startup = env(TWITTER_SYNC_ON_STARTUP) |
+                                        .bridge.temporary_disconnect_notices = env(TWITTER_TEMPORARY_DISCONNECT_NOTICES) |
+                                        .bridge.on_reconnection_fail.action = env(TWITTER_RECONNECTION_FAIL_ACTION) |
+                                        .bridge.on_reconnection_fail.wait_for = env(TWITTER_RECONNECTION_FAIL_WAIT) |
+                                        .bridge.disable_bridge_notices = env(TWITTER_DISABLE_BRIDGE_NOTICES) |
+                                        .bridge.resend_bridge_info = env(TWITTER_RESEND_BRIDGE_INFO) |
+                                        .bridge.mute_bridging = env(TWITTER_MUTE_BRIDGING) |
+                                        .bridge.tag_only_on_create = env(TWITTER_TAG_ONLY_ON_CREATE) |
+                                        .bridge.sandbox_media_download = env(TWITTER_SANDBOX_MEDIA_DOWNLOAD) |
+                                        .bridge.get_proxy_api_url = env(TWITTER_GET_PROXY_API_URL) |
+                                        .bridge.encryption.allow = env(TWITTER_ENCRYPTION_ALLOW) |
+                                        .bridge.encryption.default = env(TWITTER_ENCRYPTION_DEFAULT) |
+                                        .bridge.encryption.appservice = env(TWITTER_ENCRYPTION_APPSERVICE) |
+                                        .bridge.encryption.require = env(TWITTER_ENCRYPTION_REQUIRE) |
+                                        .bridge.encryption.allow_key_sharing = env(TWITTER_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                        .bridge.encryption.verification_levels.receive = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                        .bridge.encryption.verification_levels.send = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                        .bridge.encryption.verification_levels.share = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                        .bridge.encryption.rotation.enable_custom = env(TWITTER_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                        .bridge.encryption.rotation.milliseconds = env(TWITTER_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                        .bridge.encryption.rotation.messages = env(TWITTER_ENCRYPTION_ROTATION_MESSAGES)
+                                    ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${TWITTER_PERMISSIONS_RELAY}" ] ; then
+            twrelays=$(echo "${TWITTER_PERMISSIONS_RELAY}" | tr "," "\n")
+            for twrelay in $twrelays; do
+                if [ "$twrelay" = "*" ] ; then
+                    export TWITTERRELAY="PLACEHOLDERASTERISK"
+                else
+                    export TWITTERRELAY=$twrelay
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[  "'$(echo ${TWITTERRELAY})'" ]+= "relay"
+                                            ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${TWITTER_PERMISSIONS_ADMIN}" ] ; then
+            twadmins=$(echo "${TWITTER_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for twadmin in $twadmins; do
+                if [ "$twadmin" = "*" ] ; then
+                    export TWITTERADMIN="PLACEHOLDERASTERISK"
+                else
+                    export TWITTERADMIN=$twadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${TWITTERADMIN})'" ] += "admin"
+                                            ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${TWITTER_PERMISSIONS_USER}" ] ; then
+            twusers=$(echo "${TWITTER_PERMISSIONS_USER}" | tr "," "\n")
+            for twuser in $twusers; do
+                if [ "$twuser" = "*" ] ; then
+                    export TWITTERUSER="PLACEHOLDERASTERISK"
+                else
+                    export TWITTERUSER=$twuser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(TWITTERUSER)] += "user"
+                                            ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        fi
+
+        case "${TWITTER_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_twitter "${TWITTER_LOG_PATH}"/"${TWITTER_LOG_FILE}" matrix matrix bridge_twitter
+                export TWITTER_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export TWITTER_LOG_TYPE="console"
+            ;;
+            "file" )
+                create_logrotate bridge_twitter "${TWITTER_LOG_PATH}"/"${TWITTER_LOG_FILE}" matrix matrix bridge_twitter
+                export TWITTER_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i   '
+                                        .logging.version = 1 |
+                                        .logging.handlers.file.class = "logging.FileHandler" |
+                                        .logging.handlers.file.filename = "'$(echo "${TWITTER_LOG_PATH}/${TWITTER_LOG_FILE}")'" |
+                                        del(.logging.handlers.file.backupCount) |
+                                        del(.logging.handlers.file.maxBytes) |
+                                        .logging.loggers.mau.level = env(TWITTER_LOG_LEVEL_MAU) |
+                                        .logging.loggers.aiohttp.level = env(TWITTER_LOG_LEVEL_AIOHTTP) |
+                                        .logging.root.level = env(TWITTER_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${TWITTER_LOG_TYPE,,//,/\",\"}")'" ]
+                                    ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+
+        create_logrotate bridge_twitter "${TWITTER_LOG_PATH}"/"${TWITTER_LOG_FILE}" matrix matrix bridge_twitter
+
+        if [ ! -f "${TWITTER_REGISTRATION_PATH}"/"${TWITTER_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_twitter] Didn't find a registration file. Generating to '${TWITTER_REGISTRATION_PATH}/${TWITTER_REGISTRATION_FILE}'"
+            tw_generate_registration=true
+        elif var_true "${TWITTER_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_twitter] Regenerating registration file to '${TWITTER_REGISTRATION_PATH}/${TWITTER_REGISTRATION_FILE}'"
+            tw_generate_registration=true
+        elif var_true "${tw_force_registration}" ; then
+            print_notice "[configure_twitter] Something has changed  - Force generating registration file to '${TWITTER_REGISTRATION_PATH}/${TWITTER_REGISTRATION_FILE}'"
+            tw_generate_registration=true
+        fi
+
+        if var_true "${tw_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${TWITTER_REGISTRATION_PATH}"
             s6-setuidgid matrix python3 -m mautrix_twitter \
-                                                    -g \
-                                                    -c "${TWITTER_CONFIG_PATH}"/${TWITTER_CONFIG_FILE} \
-                                                    -r "${TWITTER_DATA_PATH}"/"${TWITTER_REGISTRATION_FILE}" \
-                                                    || exit $?
-
-            print_notice "[configure_twitter] Didn't find a registration file. Autogenerating to '${TWITTER_DATA_PATH}/${TWITTER_REGISTRATION_FILE}'"
-            print_notice "[configure_twitter] See https://docs.mau.fi/bridges/general/registering-appservices.html"
+                                                        -g \
+                                                        -c "${TWITTER_CONFIG_PATH}"/${TWITTER_CONFIG_FILE} \
+                                                        -r "${TWITTER_REGISTRATION_PATH}"/"${TWITTER_REGISTRATION_FILE}" \
+                                                        || exit $?
+            print_notice "[configure_twitter] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
     fi
 }
@@ -491,10 +2228,10 @@ configure_whatsapp() {
 
         case "${WHATSAPP_DB_TYPE,,}" in
             postgres* )
-                sanity_var WHATSAPP_DB_USER "DB Username for Facebook"
-                sanity_var WHATSAPP_DB_PASS "DB Password for Facebook"
-                sanity_var WHATSAPP_DB_HOST "DB Host for Facebook"
-                sanity_var WHATSAPP_DB_NAME "DB Name for Facebook"
+                sanity_var WHATSAPP_DB_USER "DB Username for Whatsapp"
+                sanity_var WHATSAPP_DB_PASS "DB Password for Whatsapp"
+                sanity_var WHATSAPP_DB_HOST "DB Host for Whatsapp"
+                sanity_var WHATSAPP_DB_NAME "DB Name for Whatsapp"
                 counter=0
                 export PGPASSWORD=${WHATSAPP_DB_PASS}
                 until pg_isready --dbname="${WHATSAPP_DB_NAME}" --host="${WHATSAPP_DB_HOST}" --port="${WHATSAPP_DB_PORT}" --username="${WHATSAPP_DB_USER}" -q ; do
@@ -533,7 +2270,7 @@ configure_whatsapp() {
                                         .homeserver.async_media = env(WHATSAPP_HOMESERVER_ENABLE_ASYNC_UPLOADS)
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .appservice.address = env(WHATSAPP_APPSERVER_ADDRESS) |
                                         .appservice.hostname = env(WHATSAPP_LISTEN_IP) |
                                         .appservice.port = env(WHATSAPP_LISTEN_PORT) |
@@ -584,12 +2321,12 @@ configure_whatsapp() {
                                         ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
         fi
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .metrics.enabled = env(WHATSAPP_ENABLE_METRICS) |
                                         .metrics.listen = "'$(echo ${WHATSAPP_METRICS_LISTEN_IP}:${WHATSAPP_METRICS_LISTEN_PORT})'"
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .segment_key = env(WHATSAPP_SEGMENT_API_KEY)
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
@@ -598,7 +2335,7 @@ configure_whatsapp() {
                                         .whatsapp.browser_name = env(WHATSAPP_BROWSER_NAME)
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i    '
+        s6-setuidgid matrix yq -i   '
                                         .bridge.username_template = strenv(WHATSAPP_TEMPLATE_USERNAME) |
                                         .bridge.displayname_template = strenv(WHATSAPP_TEMPLATE_DISPLAYNAME) |
                                         .bridge.personal_filtering_spaces = env(WHATSAPP_PERSONAL_FILTERING_SPACES) |
@@ -732,6 +2469,7 @@ setup_bridges() {
             ENABLE_DISCORD=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
             ENABLE_FACEBOOK=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
             ENABLE_GOOGLECHAT=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
+            ENABLE_HOOKSHOT=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
             ENABLE_INSTAGRAM=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
             ENABLE_SIGNAL=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
             ENABLE_SLACK=TRUE >> /tmp/.container/matrix_bridges/.bridge-env
@@ -751,6 +2489,9 @@ setup_bridges() {
                     ;;
                     "google*")
                         echo "ENABLE_GOOGLECHAT=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "hookshot" | "figma" | "github" | "gitlab" | "jira" | "webhooks" | "rss" | "atom")
+                        echo "ENABLE_HOOKSHOT=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
                     ;;
                     "instagram")
                         echo "ENABLE_INSTAGRAM=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env

@@ -33,6 +33,12 @@ if [ ! -f "/tmp/.container/container-restart" ] ; then
         rm -rf /etc/services.available/bridge-googlechat
     fi
 
+    if var_true "${ENABLE_HOOKSHOT}" ; then
+        configure_hookshot
+    else
+        rm -rf /etc/services.available/bridge-hookshot
+    fi
+
     if var_true "${ENABLE_INSTAGRAM}" ; then
         configure_instagram
     else

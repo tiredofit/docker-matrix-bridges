@@ -6,9 +6,9 @@ source /assets/defaults/matrix_bridges
 source /assets/defaults/bridge_slack
 
 check_container_initialized
-check_service_initialized 10-matrix_bridges
-
+#check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Slack bridge version ${SLACK_VERSION}"
-sudo -u matrix exec /usr/bin/mautrix-slack
+sudo -u matrix exec /usr/bin/mautrix-slack \
+                                            -c "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"

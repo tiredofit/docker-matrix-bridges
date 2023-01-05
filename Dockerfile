@@ -1,11 +1,48 @@
 ARG ALPINE_VERSION=3.17
+ARG DEBIAN_VERSION=bullseye
+
+FROM docker.io/tiredofit/debian:${DEBIAN_VERSION} as hookshot_builder
+LABEL maintainer="Dave Conroy (github.com/tiredofit)"
+
+ARG NODE_VERSION=18
+ENV HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"2.5.0"} \
+    HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
+    PATH="/root/.cargo/bin:${PATH}"
+
+RUN source /assets/functions/00-container && \
+    set -x && \
+    curl -sSL https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - && \
+    echo "deb https://deb.nodesource.com/node_${NODE_VERSION}.x $(cat /etc/os-release |grep "VERSION=" | awk 'NR>1{print $1}' RS='(' FS=')') main" > /etc/apt/sources.list.d/nodejs.list && \
+    curl -sSL https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list && \
+    curl -sSL https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal && \
+    package update && \
+    package upgrade && \
+    package install \
+                    build-essential \
+                    cmake \
+                    git \
+                    nodejs \
+                    yarn \
+                    && \
+    clone_git_repo "${HOOKSHOT_REPO_URL}" "${HOOKSHOT_VERSION}" /usr/src/hookshot && \
+    yarn \
+        --ignore-scripts \
+        --pure-lockfile \
+        --network-timeout 600000 \
+        && \
+    node node_modules/esbuild/install.js && \
+    yarn build
 
 FROM docker.io/tiredofit/alpine:${ALPINE_VERSION}
 LABEL maintainer="Dave Conroy (github.com/tiredofit)"
 
+COPY --from=hookshot_builder /usr/src/hookshot/yarn.lock /usr/src/hookshot/package.json  /opt/hookshot/
+
 ARG DISCORD_VERSION
 ARG FACEBOOK_VERSION
 ARG GOOGLECHAT_VERSION
+ARG HOOKSHOT_VERSION
 ARG INSTAGRAM_VERSION
 ARG SIGNAL_VERSION
 ARG SLACK_VERSION
@@ -16,7 +53,9 @@ ARG WHATSAPP_VERSION
 ENV DISCORD_VERSION=${DISCORD_VERSION:-"main"} \
     FACEBOOK_VERSION=${FACEBOOK_VERSION:-"v0.4.1"} \
     GOOGLECHAT_VERSION=${GOGGLECHAT_VERSION:-"v0.4.0"} \
+    HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"2.5.0"} \
     INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"v0.2.2"} \
+    SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.4.2"} \
     SLACK_VERSION=${SLACK_VERSION:-"main"} \
     TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.12.2"} \
     TWITTER_VERSION=${TWITTER_VERSION:-"v0.1.5"} \
@@ -24,10 +63,10 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"main"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
     FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     GOOGLECHAT_REPO_URL=https://github.com/mautrix/googlechat \
+    HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
     INSTAGRAM_REPO_URL=https://github.com/mautrix/instagram \
-    SLACK_REPO_URL=https://github.com/mautrix/slack \
-    SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.4.2"} \
     SIGNAL_REPO_URL=https://github.com/mautrix/signal \
+    SLACK_REPO_URL=https://github.com/mautrix/slack \
     TELEGRAM_REPO_URL=https://github.com/mautrix/telegram \
     TWITTER_REPO_URL=https://github.com/mautrix/twitter \
     WHATSAPP_REPO_URL=https://github.com/mautrix/whatsapp \
@@ -114,6 +153,17 @@ RUN source assets/functions/00-container && \
                     py3-unpaddedbase64 \
                     && \
     \
+    package install .hookshot-build-deps \
+                    cargo \
+                    nodejs \
+                    rust \
+                    yarn \
+                    && \
+    \
+    package install .hookshot-run-deps \
+                    nodejs \
+                    && \
+                    \
     package install .instagram-build-deps \
                     libffi-dev  \
                     py3-pip \
@@ -255,7 +305,6 @@ RUN source assets/functions/00-container && \
                     sqlite \
                     && \
     \
-    ##
     clone_git_repo "${DISCORD_REPO_URL}" "${DISCORD_VERSION}" && \
     mkdir -p /assets/config/discord && \
     go build -o /usr/bin/mautrix-discord && \
@@ -284,7 +333,14 @@ RUN source assets/functions/00-container && \
     \
     mkdir -p /assets/config/googlechat && \
     cp -R mautrix_googlechat/example-config.yaml /assets/config/googlechat/example.config.yaml && \
-    \
+    yarn \
+        --ignore-scripts \
+        --production \
+        --pure-lockfile \
+        --network-timeout 600000 \
+        && \
+    yarn cache clean && \
+
     clone_git_repo "${INSTAGRAM_REPO_URL}" "${INSTAGRAM_VERSION}" && \
     pip3 install \
                 --upgrade \
@@ -326,6 +382,18 @@ RUN source assets/functions/00-container && \
     mkdir -p /assets/config/telegram && \
     cp -R mautrix_telegram/example-config.yaml /assets/config/telegram/example.config.yaml && \
     \
+    clone_git_repo "${TWITTER_REPO_URL}" "${TWITTER_VERSION}" && \
+    pip3 install \
+                --upgrade \
+                --no-cache-dir \
+                -r requirements.txt \
+                -r optional-requirements.txt \
+                .[all] \
+                && \
+    \
+    mkdir -p /assets/config/twitter && \
+    cp -R mautrix_twitter/example-config.yaml /assets/config/twitter/example.config.yaml && \
+    \
     clone_git_repo "${WHATSAPP_REPO_URL}" "${WHATSAPP_VERSION}" && \
     go build -o /usr/bin/mautrix-whatsapp && \
     mkdir -p /assets/config/whatsapp && \
@@ -348,7 +416,8 @@ RUN source assets/functions/00-container && \
     rm -rf /root/.cache \
            /root/.gitconfig \
            /root/go \
-           && \
-    rm -rf /usr/src/*
+           /usr/example-config.yaml \
+           /usr/src/*
 
+COPY --from=hookshot_builder /usr/src/hookshot/lib /usr/src/hookshot/public /opt/hookshot/
 COPY install /

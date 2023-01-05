@@ -7,7 +7,6 @@ source /assets/defaults/bridge_facebook
 
 check_container_initialized
 #check_service_initialized 10-matrix_bridges-init
-
 liftoff
 
 print_start "Starting Facebook bridge version ${FACEBOOK_VERSION}"

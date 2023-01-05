@@ -1,0 +1,18 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_hookshot"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_hookshot
+
+check_container_initialized
+#check_service_initialized 10-matrix_bridges
+liftoff
+
+print_start "Starting Hookshot bridge version ${HOOKSHOT_VERSION}"
+cd /opt/Hookshot
+
+sudo -u matrix exec node bin/matrix-hookshot/App/BridgeApp.js \
+                                                                /data/config.yml
+                                                                /data/registration.yml
+

@@ -6,8 +6,7 @@ source /assets/defaults/matrix_bridges
 source /assets/defaults/bridge_googlechat
 
 check_container_initialized
-check_service_initialized 10-matrix_bridges
-
+#check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Google Chat bridge version ${GOOGLECHAT_VERSION}"

@@ -6,9 +6,9 @@ source /assets/defaults/matrix_bridges
 source /assets/defaults/bridge_discord
 
 check_container_initialized
-check_service_initialized 10-matrix_bridges
-
+#check_service_initialized 10-matrix_bridges
 liftoff
 
 print_start "Starting Discord bridge version ${DISCORD_VERSION}"
-sudo -u matrix /usr/bin/mautrix-discord
+sudo -u matrix exec /usr/bin/mautrix-discord \
+                                                -c "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
