@@ -154,30 +154,44 @@ configure_discord() {
                                         .discord.browser_name = env(DISCORD_BROWSER_NAME)
                                     ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = strenv(DISCORD_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = strenv(DISCORD_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.personal_filtering_spaces = env(DISCORD_PERSONAL_FILTERING_SPACES) |
-                                        .bridge.delivery_receipts = env(DISCORD_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.message_status_events = env(DISCORD_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.message_error_notices = env(DISCORD_ENABLE_MESSAGE_ERROR_NOTICES) |
-                                        .bridge.call_start_notices = env(DISCORD_ENABLE_CALL_START_NOTICES) |
-                                        .bridge.identity_change_notices = env(DISCORD_ENABLE_IDENTITY_CHANGE_NOTICES) |
-                                        .bridge.portal_message_buffer = env(DISCORD_PORTAL_MESSAGE_BUFFER) |
-                                        .bridge.federate_rooms = env(DISCORD_FEDERATE_ROOMS) |
-                                        .bridge.command_prefix = "'$(echo ${DISCORD_COMMAND_PREFIX})'" |
-                                        .bridge.encryption.allow = env(DISCORD_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(DISCORD_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(DISCORD_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(DISCORD_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(DISCORD_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(DISCORD_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(DISCORD_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(DISCORD_ENCRYPTION_ROTATION_MESSAGES)
-                                    ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+        if var_true "${DISCORD_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = env(DISCORD_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = strenv(DISCORD_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.guild_name_template = env(DISCORD_TEMPLATE_GUILDNAME) |
+                                            .bridge.channel_name_template = strenv(DISCORD_TEMPLATE_CHANNELNAME) |
+                                            .bridge.private_chat_portal_meta = env(DISCORD_PRIVATE_CHAAT_PORTAL_META) |
+                                            .bridge.portal_message_buffer = env(DISCORD_PORTAL_MESSAGE_BUFFER) |
+                                            .bridge.startup_private_channel_create_limit = env(DISCORD_STARTUP_PRIVATE_CHANNEL_CREATE_LIMIT) |
+                                            .bridge.delivery_receipts = env(DISCORD_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.message_status_events = env(DISCORD_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.message_error_notices = env(DISCORD_ENABLE_MESSAGE_ERROR_NOTICES) |
+                                            .bridge.restricted_rooms = env(DISCORD_RESTRICTED_ROOMS) |
+                                            .bridge.autojoin_thread_on_open = env(DISCORD_AUTOJOIN_THREAD_ON_OPEN) |
+                                            .bridge.sync_direct_chat_list = env(DISCORD_SYNC_DIRECT_CHAT_LIST) |
+                                            .bridge.resend_bridge_info = env(DISCORD_RESEND_BRIDGE_INFO) |
+                                            .bridge.delete_portal_on_channel_delete = env(DISCORD_) |
+                                            .bridge.federate_rooms = env(DISCORD_FEDERATE_ROOMS) |
+                                            .bidge.double_puppet_allow_discovery = env(DISCORD_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
+                                            .bridge.management_room_text.welcome = env(DISCORD_MANAGEMENT_ROOM_TEXT_WELCOME) |
+                                            .bridge.management_room_text.welcome_connected = env(DISCORD_MANAGEMENT_ROOM_TEXT_WELCOME_CONNECTED) |
+                                            .bridge.management_room_text.welcome_unconnected = env(DISCORD_MANAGEMENT_ROOM_TEXT_WELCOME_UNCONNECTED) |
+                                            .bridge.management_room_text.additional_help = env(DISCORD_MANAGEMENT_ROOM_TEXT_ADDITIONAL_HELP) |
+                                            .bridge.provisioning.prefix = env(DISCORD_PROVISIONING_PREFIX) |
+                                            .bridge.command_prefix = "'$(echo ${DISCORD_COMMAND_PREFIX})'" |
+                                            .bridge.encryption.allow = env(DISCORD_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(DISCORD_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(DISCORD_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(DISCORD_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(DISCORD_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(DISCORD_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(DISCORD_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(DISCORD_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(DISCORD_ENCRYPTION_ROTATION_MESSAGES)
+                                        ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
+        fi
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
         set -f
@@ -246,9 +260,11 @@ configure_discord() {
         s6-setuidgid matrix yq -i   '
                                         .logging.directory = "'$(echo "${DISCORD_LOG_PATH}")'" |
                                         .logging.file_name_format = env(DISCORD_LOG_FILE) |
+                                        .logging.file_mode = "644" |
+                                        .logging.timestamp_format = "2006-01-02 15:04:05" |
                                         .logging.print_level = env(DISCORD_LOG_LEVEL) |
-                                        .logging.root.handlers = [ "'$(echo "${DISCORD_LOG_TYPE,,//,/\",\"}")'" ] |
-                                        .logging.timestamp_format = "2006-01-02 15:04:05"
+                                        .logging.print_json = env(DISCORD_LOG_CONSOLE_JSON) |
+                                        .logging.file_json = env(DISCORD_LOG_FILE_JSON)
                                     ' "${DISCORD_CONFIG_PATH}"/"${DISCORD_CONFIG_FILE}"
 
         create_logrotate bridge_discord "${DISCORD_LOG_PATH}"/"${DISCORD_LOG_FILE}" matrix matrix bridge_discord
@@ -406,52 +422,54 @@ configure_facebook() {
                                         .manhole.whitelist = [ "'$(echo ${FACEBOOK_MANHOLE_WHITELIST//,/\",\"})'" ]
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = strenv(FACEBOOK_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = strenv(FACEBOOK_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.displayname_preference = [ "'$(echo ${FACEBOOK_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
-                                        .bridge.command_prefix = "'$(echo ${FACEBOOK_COMMAND_PREFIX})'" |
-                                        .bridge.invite_own_puppet_to_pm = env(FACEBOOK_INVITE_OWN_PUPPET_TO_PM) |
-                                        .bridge.sync_direct_chat_list = env(FACEBOOK_SYNC_DIRECT_CHAT_LIST) |
-                                        .bridge.presence_from_facebook = env(FACEBOOK_BRIDGE_PRESENCE) |
-                                        .bridge.update_avatar_initial_sync = env(FACEBOOK_SYNC_UPDATE_AVATAR) |
-                                        .bridge.delivery_receipts = env(FACEBOOK_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.delivery_error_reports = env(FACEBOOK_ENABLE_DELIVERY_ERROR_REPORTS) |
-                                        .bridge.message_status_events = env(FACEBOOK_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.allow_invites = env(FACEBOOK_ALLOW_INVITES) |
-                                        .bridge.federate_rooms = env(FACEBOOK_FEDERATE_ROOMS) |
-                                        .bridge.backfill.enable = env(FACEBOOK_BACKFILL_ENABLE) |
-                                        .bridge.backfill.msc2716 = env(FACEBOOK_BACKFILL_ENABLE_MSC2716) |
-                                        .bridge.backfill.max_conversations = env(FACEBOOK_BACKFILL_MAX_CONVERSATIONS) |
-                                        .bridge.backfill.min_sync_thread_delay = env(FACEBOOK_BACKFILL_SYNC_THREAD_DELAY) |
-                                        .bridge.backfill.unread_hours_threshold = env(FACEBOOK_BACKFILL_UNREAD_HOURS_THRESHOLD) |
-                                        .bridge.periodic_reconnect.interval = env(FACEBOOK_PERIODIC_RECONNECT_INTERVAL) |
-                                        .bridge.periodic_reconnect.refresh = env(FACEBOOK_PERIODIC_RECONNECT_MODE) |
-                                        .bridge.periodic_reconnect.always = env(FACEBOOK_PERIODIC_RECONNECT_ALWAYS) |
-                                        .bridge.periodic_reconnect.min_connected_time = env(FACEBOOK_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
-                                        .bridge.resync_max_disconnected_time = env(FACEBOOK_RESYNC_MAX_DISCONNECTED_TIME) |
-                                        .bridge.sync_on_startup = env(FACEBOOK_SYNC_ON_STARTUP) |
-                                        .bridge.temporary_disconnect_notices = env(FACEBOOK_TEMPORARY_DISCONNECT_NOTICES) |
-                                        .bridge.on_reconnection_fail.action = env(FACEBOOK_RECONNECTION_FAIL_ACTION) |
-                                        .bridge.on_reconnection_fail.wait_for = env(FACEBOOK_RECONNECTION_FAIL_WAIT) |
-                                        .bridge.disable_bridge_notices = env(FACEBOOK_DISABLE_BRIDGE_NOTICES) |
-                                        .bridge.resend_bridge_info = env(FACEBOOK_RESEND_BRIDGE_INFO) |
-                                        .bridge.mute_bridging = env(FACEBOOK_MUTE_BRIDGING) |
-                                        .bridge.tag_only_on_create = env(FACEBOOK_TAG_ONLY_ON_CREATE) |
-                                        .bridge.sandbox_media_download = env(FACEBOOK_SANDBOX_MEDIA_DOWNLOAD) |
-                                        .bridge.get_proxy_api_url = env(FACEBOOK_GET_PROXY_API_URL) |
-                                        .bridge.encryption.allow = env(FACEBOOK_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(FACEBOOK_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(FACEBOOK_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(FACEBOOK_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(FACEBOOK_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(FACEBOOK_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(FACEBOOK_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(FACEBOOK_ENCRYPTION_ROTATION_MESSAGES)
-                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+        if var_true "${FACEBOOK_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = strenv(FACEBOOK_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = strenv(FACEBOOK_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.displayname_preference = [ "'$(echo ${FACEBOOK_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
+                                            .bridge.command_prefix = "'$(echo ${FACEBOOK_COMMAND_PREFIX})'" |
+                                            .bridge.invite_own_puppet_to_pm = env(FACEBOOK_INVITE_OWN_PUPPET_TO_PM) |
+                                            .bridge.sync_direct_chat_list = env(FACEBOOK_SYNC_DIRECT_CHAT_LIST) |
+                                            .bridge.presence_from_facebook = env(FACEBOOK_BRIDGE_PRESENCE) |
+                                            .bridge.update_avatar_initial_sync = env(FACEBOOK_SYNC_UPDATE_AVATAR) |
+                                            .bridge.delivery_receipts = env(FACEBOOK_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.delivery_error_reports = env(FACEBOOK_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                            .bridge.message_status_events = env(FACEBOOK_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.allow_invites = env(FACEBOOK_ALLOW_INVITES) |
+                                            .bridge.federate_rooms = env(FACEBOOK_FEDERATE_ROOMS) |
+                                            .bridge.backfill.enable = env(FACEBOOK_BACKFILL_ENABLE) |
+                                            .bridge.backfill.msc2716 = env(FACEBOOK_BACKFILL_ENABLE_MSC2716) |
+                                            .bridge.backfill.max_conversations = env(FACEBOOK_BACKFILL_MAX_CONVERSATIONS) |
+                                            .bridge.backfill.min_sync_thread_delay = env(FACEBOOK_BACKFILL_SYNC_THREAD_DELAY) |
+                                            .bridge.backfill.unread_hours_threshold = env(FACEBOOK_BACKFILL_UNREAD_HOURS_THRESHOLD) |
+                                            .bridge.periodic_reconnect.interval = env(FACEBOOK_PERIODIC_RECONNECT_INTERVAL) |
+                                            .bridge.periodic_reconnect.refresh = env(FACEBOOK_PERIODIC_RECONNECT_MODE) |
+                                            .bridge.periodic_reconnect.always = env(FACEBOOK_PERIODIC_RECONNECT_ALWAYS) |
+                                            .bridge.periodic_reconnect.min_connected_time = env(FACEBOOK_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
+                                            .bridge.resync_max_disconnected_time = env(FACEBOOK_RESYNC_MAX_DISCONNECTED_TIME) |
+                                            .bridge.sync_on_startup = env(FACEBOOK_SYNC_ON_STARTUP) |
+                                            .bridge.temporary_disconnect_notices = env(FACEBOOK_TEMPORARY_DISCONNECT_NOTICES) |
+                                            .bridge.on_reconnection_fail.action = env(FACEBOOK_RECONNECTION_FAIL_ACTION) |
+                                            .bridge.on_reconnection_fail.wait_for = env(FACEBOOK_RECONNECTION_FAIL_WAIT) |
+                                            .bridge.disable_bridge_notices = env(FACEBOOK_DISABLE_BRIDGE_NOTICES) |
+                                            .bridge.resend_bridge_info = env(FACEBOOK_RESEND_BRIDGE_INFO) |
+                                            .bridge.mute_bridging = env(FACEBOOK_MUTE_BRIDGING) |
+                                            .bridge.tag_only_on_create = env(FACEBOOK_TAG_ONLY_ON_CREATE) |
+                                            .bridge.sandbox_media_download = env(FACEBOOK_SANDBOX_MEDIA_DOWNLOAD) |
+                                            .bridge.get_proxy_api_url = env(FACEBOOK_GET_PROXY_API_URL) |
+                                            .bridge.encryption.allow = env(FACEBOOK_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(FACEBOOK_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(FACEBOOK_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(FACEBOOK_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(FACEBOOK_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(FACEBOOK_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(FACEBOOK_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(FACEBOOK_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(FACEBOOK_ENCRYPTION_ROTATION_MESSAGES)
+                                        ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
+        fi
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
         set -f
@@ -679,45 +697,47 @@ configure_googlechat() {
                                         .manhole.whitelist = [ "'$(echo ${GOOGLECHAT_MANHOLE_WHITELIST//,/\",\"})'" ]
                                     ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = strenv(GOOGLECHAT_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = strenv(GOOGLECHAT_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.command_prefix = "'$(echo ${GOOGLECHAT_COMMAND_PREFIX})'" |
-                                        .bridge.inital_chat_sync = env(GOOGLECHAT_INITIAL_CHAT_SYNC) |
-                                        .bridge.invite_own_puppet_to_pm = env(GOOGLECHAT_INVITE_OWN_PUPPET_TO_PM) |
-                                        .bridge.sync_with_custom_puppets = env(GOOGLECHAT_SYNC_WITH_CUSTOM_PUPPETS) |
-                                        .bridge.sync_direct_chat_list = env(GOOGLECHAT_SYNC_DIRECT_CHAT_LIST) |
-                                        .bridge.update_avatar_initial_sync = env(GOOGLECHAT_SYNC_UPDATE_AVATAR) |
-                                        .bridge.encryption.allow = env(GOOGLECHAT_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(GOOGLECHAT_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(GOOGLECHAT_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(GOOGLECHAT_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(GOOGLECHAT_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(GOOGLECHAT_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(GOOGLECHAT_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(GOOGLECHAT_ENCRYPTION_ROTATION_MESSAGES) |
-                                        .bridge.delivery_receipts = env(GOOGLECHAT_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.delivery_error_reports = env(GOOGLECHAT_ENABLE_DELIVERY_ERROR_REPORTS) |
-                                        .bridge.message_status_events = env(GOOGLECHAT_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.federate_rooms = env(GOOGLECHAT_FEDERATE_ROOMS) |
-                                        .bridge.backfill.enable = env(GOOGLECHAT_BACKFILL_ENABLE) |
-                                        .bridge.backfill.invite_own_puppet = env(GOOGLECHAT_BACKFILL_INVITE_OWN_PUPPET) |
-                                        .bridge.backfill.initial_thread_limit = env(GOOGLECHAT_BACKFILL_INITIAL_THREAD_LIMIT) |
-                                        .bridge.backfill.initial_thread_reply_limit = env(GOOGLECHAT_BACKFILL_INITIAL_THREAD_REPLY_LIMIT) |
-                                        .bridge.backfill.initial_nonthread_limit = env(GOOGLECHAT_BACKFILL_INITIAL_NONTHREAD_LIMIT) |
-                                        .bridge.backfill.missed_event_limit = env(GOOGLECHAT_BACKFILL_BACKFILL_MISSED_EVENT_LIMIT) |
-                                        .bridge.backfill.missed_event_page_size = env(GOOGLECHAT_BACKFILL_BACKFILL_MISSED_EVENT_PAGE_SIZE) |
-                                        .bridge.backfill.disable_notifications = env(GOOGLECHAT_BACKFILL_DISABLE_NOTIFICATIONS) |
-                                        .bridge.disable_bridge_notices = env(GOOGLECHAT_DISABLE_BRIDGE_NOTICES) |
-                                        .bridge.resend_bridge_info = env(GOOGLECHAT_RESEND_BRIDGE_INFO) |
-                                        .bridge.unimportant_bridge_notices = env(GOOGLECHAT_UNIMPORTANT_BRIDGE_NOTICES)
-                                        .bridge.provisioning.enabled = env(GOOGLECHAT_PROVISIONING_ENABLE) |
-                                        .bridge.provisioning.prefix = env(GOOGLECHAT_PROVISIONING_PREFIX) |
-                                        .bridge.provisioning.segment_key = env(GOOGLECHAT_PROVISIONING_SEGMENT_KEY) |
-                                    ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+        if var_true "${GOOGLECHAT_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = strenv(GOOGLECHAT_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = strenv(GOOGLECHAT_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.command_prefix = "'$(echo ${GOOGLECHAT_COMMAND_PREFIX})'" |
+                                            .bridge.inital_chat_sync = env(GOOGLECHAT_INITIAL_CHAT_SYNC) |
+                                            .bridge.invite_own_puppet_to_pm = env(GOOGLECHAT_INVITE_OWN_PUPPET_TO_PM) |
+                                            .bridge.sync_with_custom_puppets = env(GOOGLECHAT_SYNC_WITH_CUSTOM_PUPPETS) |
+                                            .bridge.sync_direct_chat_list = env(GOOGLECHAT_SYNC_DIRECT_CHAT_LIST) |
+                                            .bridge.update_avatar_initial_sync = env(GOOGLECHAT_SYNC_UPDATE_AVATAR) |
+                                            .bridge.encryption.allow = env(GOOGLECHAT_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(GOOGLECHAT_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(GOOGLECHAT_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(GOOGLECHAT_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(GOOGLECHAT_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(GOOGLECHAT_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(GOOGLECHAT_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(GOOGLECHAT_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(GOOGLECHAT_ENCRYPTION_ROTATION_MESSAGES) |
+                                            .bridge.delivery_receipts = env(GOOGLECHAT_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.delivery_error_reports = env(GOOGLECHAT_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                            .bridge.message_status_events = env(GOOGLECHAT_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.federate_rooms = env(GOOGLECHAT_FEDERATE_ROOMS) |
+                                            .bridge.backfill.enable = env(GOOGLECHAT_BACKFILL_ENABLE) |
+                                            .bridge.backfill.invite_own_puppet = env(GOOGLECHAT_BACKFILL_INVITE_OWN_PUPPET) |
+                                            .bridge.backfill.initial_thread_limit = env(GOOGLECHAT_BACKFILL_INITIAL_THREAD_LIMIT) |
+                                            .bridge.backfill.initial_thread_reply_limit = env(GOOGLECHAT_BACKFILL_INITIAL_THREAD_REPLY_LIMIT) |
+                                            .bridge.backfill.initial_nonthread_limit = env(GOOGLECHAT_BACKFILL_INITIAL_NONTHREAD_LIMIT) |
+                                            .bridge.backfill.missed_event_limit = env(GOOGLECHAT_BACKFILL_BACKFILL_MISSED_EVENT_LIMIT) |
+                                            .bridge.backfill.missed_event_page_size = env(GOOGLECHAT_BACKFILL_BACKFILL_MISSED_EVENT_PAGE_SIZE) |
+                                            .bridge.backfill.disable_notifications = env(GOOGLECHAT_BACKFILL_DISABLE_NOTIFICATIONS) |
+                                            .bridge.disable_bridge_notices = env(GOOGLECHAT_DISABLE_BRIDGE_NOTICES) |
+                                            .bridge.resend_bridge_info = env(GOOGLECHAT_RESEND_BRIDGE_INFO) |
+                                            .bridge.unimportant_bridge_notices = env(GOOGLECHAT_UNIMPORTANT_BRIDGE_NOTICES)
+                                            .bridge.provisioning.enabled = env(GOOGLECHAT_PROVISIONING_ENABLE) |
+                                            .bridge.provisioning.prefix = env(GOOGLECHAT_PROVISIONING_PREFIX) |
+                                            .bridge.provisioning.segment_key = env(GOOGLECHAT_PROVISIONING_SEGMENT_KEY) |
+                                        ' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
+        fi
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${GOOGLECHAT_CONFIG_PATH}"/"${GOOGLECHAT_CONFIG_FILE}"
         set -f
@@ -943,68 +963,70 @@ configure_instagram() {
                                         .manhole.whitelist = [ "'$(echo ${INSTAGRAM_MANHOLE_WHITELIST//,/\",\"})'" ]
                                     ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = env(INSTAGRAM_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = env(INSTAGRAM_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.private_chat_name_template = env(INSTAGRAM_TEMPLATE_PRIVATE_CHAT_NAME) |
-                                        .bridge.group_chat_name_template = env(INSTAGRAM_TEMPLATE_GROUP_CHAT_NAME) |
-                                        .bridge.displayname_max_length = env(INSTAGRAM_DISPLAYNAME_MAX_LENGTH) |
-                                        .bridge.max_startup_thread_sync_count = env(INSTAGRAM_MAX_STARTUP_THREAD_SYNC_COUNT) |
-                                        .bridge.sync_with_custom_puppets = env(INSTAGRAM_SYNC_WITH_CUSTOM_PUPPETS) |
-                                        .bridge.sync_direct_chat_list = env(INSTAGRAM_SYNC_DIRECT_CHAT_LIST) |
-                                        .bridge.double_puppet_allow_discovery = env(INSTAGRAM_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
-                                        .bridge.federate_rooms = env(INSTAGRAM_FEDERATE_ROOMS) |
-                                        .bridge.backfill.enable = env(INSTAGRAM_BACKFILL_ENABLE) |
-                                        .bridge.backfill.msc2716 = env(INSTAGRAM_BACKFILL_ENABLE_MSC2716) |
-                                        .bridge.backfill.double_puppet_backfill = env(INSTAGRAM_BACKFILL_DOUBLE_PUPPET) |
-                                        .bridge.backfill.max_conversations = env(INSTAGRAM_BACKFILL_MAX_CONVERSATIONS) |
-                                        .bridge.backfill.min_sync_thread_delay = env(INSTAGRAM_BACKFILL_SYNC_THREAD_DELAY) |
-                                        .bridge.backfill.unread_hours_threshold = env(INSTAGRAM_BACKFILL_UNREAD_HOURS_THRESHOLD) |
-                                        .bridge.backfill.backoff.thread_list = env(INSTAGRAM_BACKFILL_BACKOFF_THREAD_LIST) |
-                                        .bridge.backfill.backoff.message_history = env(INSTAGRAM_BACKFILL_BACKOFF_MESSAGE_HISTORY) |
-                                        .bridge.backfill.incremental.max_pages = env(INSTAGRAM_BACKFILL_INCREMENTAL_MAX_PAGES) |
-                                        .bridge.backfill.incremental.max_total_pages = env(INSTAGRAM_BACKFILL_INCREMENTAL_MAX_TOTAL_PAGES) |
-                                        .bridge.backfill.incremental.page_delay = env(INSTAGRAM_BACKFILL_INCREMENTAL_PAGE_DELAY) |
-                                        .bridge.backfill.incremental.post_batch_delay = env(INSTAGRAM_BACKFILL_INCREMENTAL_POST_BATCH_DELAY) |
-                                        .bridge.backfill.periodic_reconnect.interval = env(INSTAGRAM_PERIODIC_CONNECT_INTERVAL) |
-                                        .bridge.backfill.periodic_reconnect.resync = env(INSTAGRAM_PERIODIC_CONNECT_RESYNC) |
-                                        .bridge.backfill.periodic_reconnect.always = env(INSTAGRAM_PERIODIC_CONNECT_ALWAYS) |
-                                        .bridge.get_proxy_api_url = env(INSTAGRAM_GET_PROXY_API_URL) |
-                                        .bridge.encryption.allow = env(INSTAGRAM_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(INSTAGRAM_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(INSTAGRAM_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(INSTAGRAM_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(INSTAGRAM_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(INSTAGRAM_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(INSTAGRAM_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(INSTAGRAM_ENCRYPTION_ROTATION_MESSAGES)
-                                        .bridge.command_prefix = "'$(echo ${INSTAGRAM_COMMAND_PREFIX})'" |
-                                        .bridge.private_chat_portal_meta = env(INSTAGRAM_PRIVATE_CHAT_PORTA_META) |
-                                        .bridge.delivery_receipts = env(INSTAGRAM_ENABLE_DELIVERY_RECIPTS) |
-                                        .bridge.delivery_error_reports = env(INSTAGRAM_ENABLE_DELIVERY_ERROR_REPORTS) |
-                                        .bridge.message_status_events = env(INSTAGRAM_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.resend_bridge_info = env(INSTAGRAM_RESEND_BRIDGE_INFO) |
-                                        .bridge.unimportant_bridge_notices = env(INSTAGRAM_UNIMPORTANT_BRIDGE_NOTICES) |
-                                        .bridge.disable_bridge_notices = env(INSTAGRAM_DISABLE_BRIDGE_NOTICES) |
-                                        .bridge.caption_in_message = env(INSTAGRAM_CAPTION_IN_MESSAGE) |
-                                        .bridge.bridge_notices = env(INSTAGRAM_ENABLE_BRIDGE_NOTICES) |
-                                        .bridge.provisioning.enabled = env(INSTAGRAM_PROVISIONING_ENABLE) |
-                                        .bridge.provisioning.prefix = env(INSTAGRAM_PROVISIONING_PREFIX) |
-                                        .bridge.provisioning.segment_key = env(INSTAGRAM_PROVISIONING_SEGMENT_KEY) |
-                                        .bridge.resync_max_disconnected_time = env(INSTAGRAM_RESYNC_MAX_DISCONNECTED_TIME) |
-                                        .bridge.sync_on_startup = env(INSTAGRAM_SYNC_ON_STARTUP) |
-                                        .bridge.temporary_disconnect_notices = env(INSTAGRAM_TEMPORARY_DISCONNECT_NOTICES) |
-                                        .bridge.on_reconnection_fail.action = env(INSTAGRAM_RECONNECTION_FAIL_ACTION) |
-                                        .bridge.on_reconnection_fail.wait_for = env(INSTAGRAM_RECONNECTION_FAIL_WAIT) |
-                                        .bridge.disable_bridge_notices = env(INSTAGRAM_DISABLE_BRIDGE_NOTICES) |
-                                        .bridge.resend_bridge_info = env(INSTAGRAM_RESEND_BRIDGE_INFO) |
-                                        .bridge.mute_bridging = env(INSTAGRAM_MUTE_BRIDGING) |
-                                        .bridge.tag_only_on_create = env(INSTAGRAM_TAG_ONLY_ON_CREATE) |
-                                        .bridge.sandbox_media_download = env(INSTAGRAM_SANDBOX_MEDIA_DOWNLOAD) |
-                                    ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+        if var_true "${INSTAGRAM_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = env(INSTAGRAM_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = env(INSTAGRAM_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.private_chat_name_template = env(INSTAGRAM_TEMPLATE_PRIVATE_CHAT_NAME) |
+                                            .bridge.group_chat_name_template = env(INSTAGRAM_TEMPLATE_GROUP_CHAT_NAME) |
+                                            .bridge.displayname_max_length = env(INSTAGRAM_DISPLAYNAME_MAX_LENGTH) |
+                                            .bridge.max_startup_thread_sync_count = env(INSTAGRAM_MAX_STARTUP_THREAD_SYNC_COUNT) |
+                                            .bridge.sync_with_custom_puppets = env(INSTAGRAM_SYNC_WITH_CUSTOM_PUPPETS) |
+                                            .bridge.sync_direct_chat_list = env(INSTAGRAM_SYNC_DIRECT_CHAT_LIST) |
+                                            .bridge.double_puppet_allow_discovery = env(INSTAGRAM_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
+                                            .bridge.federate_rooms = env(INSTAGRAM_FEDERATE_ROOMS) |
+                                            .bridge.backfill.enable = env(INSTAGRAM_BACKFILL_ENABLE) |
+                                            .bridge.backfill.msc2716 = env(INSTAGRAM_BACKFILL_ENABLE_MSC2716) |
+                                            .bridge.backfill.double_puppet_backfill = env(INSTAGRAM_BACKFILL_DOUBLE_PUPPET) |
+                                            .bridge.backfill.max_conversations = env(INSTAGRAM_BACKFILL_MAX_CONVERSATIONS) |
+                                            .bridge.backfill.min_sync_thread_delay = env(INSTAGRAM_BACKFILL_SYNC_THREAD_DELAY) |
+                                            .bridge.backfill.unread_hours_threshold = env(INSTAGRAM_BACKFILL_UNREAD_HOURS_THRESHOLD) |
+                                            .bridge.backfill.backoff.thread_list = env(INSTAGRAM_BACKFILL_BACKOFF_THREAD_LIST) |
+                                            .bridge.backfill.backoff.message_history = env(INSTAGRAM_BACKFILL_BACKOFF_MESSAGE_HISTORY) |
+                                            .bridge.backfill.incremental.max_pages = env(INSTAGRAM_BACKFILL_INCREMENTAL_MAX_PAGES) |
+                                            .bridge.backfill.incremental.max_total_pages = env(INSTAGRAM_BACKFILL_INCREMENTAL_MAX_TOTAL_PAGES) |
+                                            .bridge.backfill.incremental.page_delay = env(INSTAGRAM_BACKFILL_INCREMENTAL_PAGE_DELAY) |
+                                            .bridge.backfill.incremental.post_batch_delay = env(INSTAGRAM_BACKFILL_INCREMENTAL_POST_BATCH_DELAY) |
+                                            .bridge.backfill.periodic_reconnect.interval = env(INSTAGRAM_PERIODIC_CONNECT_INTERVAL) |
+                                            .bridge.backfill.periodic_reconnect.resync = env(INSTAGRAM_PERIODIC_CONNECT_RESYNC) |
+                                            .bridge.backfill.periodic_reconnect.always = env(INSTAGRAM_PERIODIC_CONNECT_ALWAYS) |
+                                            .bridge.get_proxy_api_url = env(INSTAGRAM_GET_PROXY_API_URL) |
+                                            .bridge.encryption.allow = env(INSTAGRAM_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(INSTAGRAM_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(INSTAGRAM_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(INSTAGRAM_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(INSTAGRAM_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(INSTAGRAM_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(INSTAGRAM_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(INSTAGRAM_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(INSTAGRAM_ENCRYPTION_ROTATION_MESSAGES)
+                                            .bridge.command_prefix = "'$(echo ${INSTAGRAM_COMMAND_PREFIX})'" |
+                                            .bridge.private_chat_portal_meta = env(INSTAGRAM_PRIVATE_CHAT_PORTA_META) |
+                                            .bridge.delivery_receipts = env(INSTAGRAM_ENABLE_DELIVERY_RECIPTS) |
+                                            .bridge.delivery_error_reports = env(INSTAGRAM_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                            .bridge.message_status_events = env(INSTAGRAM_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.resend_bridge_info = env(INSTAGRAM_RESEND_BRIDGE_INFO) |
+                                            .bridge.unimportant_bridge_notices = env(INSTAGRAM_UNIMPORTANT_BRIDGE_NOTICES) |
+                                            .bridge.disable_bridge_notices = env(INSTAGRAM_DISABLE_BRIDGE_NOTICES) |
+                                            .bridge.caption_in_message = env(INSTAGRAM_CAPTION_IN_MESSAGE) |
+                                            .bridge.bridge_notices = env(INSTAGRAM_ENABLE_BRIDGE_NOTICES) |
+                                            .bridge.provisioning.enabled = env(INSTAGRAM_PROVISIONING_ENABLE) |
+                                            .bridge.provisioning.prefix = env(INSTAGRAM_PROVISIONING_PREFIX) |
+                                            .bridge.provisioning.segment_key = env(INSTAGRAM_PROVISIONING_SEGMENT_KEY) |
+                                            .bridge.resync_max_disconnected_time = env(INSTAGRAM_RESYNC_MAX_DISCONNECTED_TIME) |
+                                            .bridge.sync_on_startup = env(INSTAGRAM_SYNC_ON_STARTUP) |
+                                            .bridge.temporary_disconnect_notices = env(INSTAGRAM_TEMPORARY_DISCONNECT_NOTICES) |
+                                            .bridge.on_reconnection_fail.action = env(INSTAGRAM_RECONNECTION_FAIL_ACTION) |
+                                            .bridge.on_reconnection_fail.wait_for = env(INSTAGRAM_RECONNECTION_FAIL_WAIT) |
+                                            .bridge.disable_bridge_notices = env(INSTAGRAM_DISABLE_BRIDGE_NOTICES) |
+                                            .bridge.resend_bridge_info = env(INSTAGRAM_RESEND_BRIDGE_INFO) |
+                                            .bridge.mute_bridging = env(INSTAGRAM_MUTE_BRIDGING) |
+                                            .bridge.tag_only_on_create = env(INSTAGRAM_TAG_ONLY_ON_CREATE) |
+                                            .bridge.sandbox_media_download = env(INSTAGRAM_SANDBOX_MEDIA_DOWNLOAD) |
+                                        ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
+        fi
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
         set -f
@@ -1262,46 +1284,48 @@ configure_signal() {
                                         .signal.enable_disappearing_messages_in_groups = env(SIGNAL_ENABLE_DISAPPEARING_MESSAGES_IN_GROUPS) |
                                     ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = strenv(SIGNAL_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = strenv(SIGNAL_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.contact_list_names = env(SIGNAL_ALLOW_CONTACT_LIST_NAMES) |
-                                        .bridge.displayname_preference = [ "'$(echo ${SIGNAL_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
-                                        .bridge.autocreate_group_portal = env(SIGNAL_AUTOCREATE_GROUP_PORTAL) |
-                                        .bridge.autocreate_contact_portal = env(SIGNAL_AUTOCREATE_CONTACT_PORTAL) |
-                                        .bridge.public_portals = env(SIGNAL_PUBLIC_PORTALS) |
-                                        .bridge.sync_with_custom_puppets = env(SIGNAL_SYNC_WITH_CUSTOM_PUPPETS) |
-                                        .bridge.sync_direct_chat_list = env(SIGNAL_SYNC_DIRECT_CHAT_LIST) |
-                                        .bridge.double_puppet_allow_discovery = env(SIGNAL_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
-                                        .bridge.federate_rooms = env(SIGNAL_FEDERATE_ROOMS) |
-                                        .bridge.encryption.allow = env(SIGNAL_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(SIGNAL_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(SIGNAL_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(SIGNAL_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(SIGNAL_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(SIGNAL_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(SIGNAL_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(SIGNAL_ENCRYPTION_ROTATION_MESSAGES) |
-                                        .bridge.private_chat_portal_meta = env(SIGNAL_PRIVATE_CHAT_PORTAL_META) |
-                                        .bridge.delivery_receipts = env(SIGNAL_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.delivery_error_reports = env(SIGNAL_ENABLE_DELIVERY_ERROR_REPORTS) |
-                                        .bridge.message_status_events = env(SIGNAL_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.resend_bridge_info = env(SIGNAL_RESEND_BRIDGE_INFO) |
-                                        .bridge.periodic_reconnect.interval = env(SIGNAL_PERIODIC_RECONNECT_INTERVAL) |
-                                        .bridge.bridge_matrix_leave= = env(SIGNAL_BRIDGE_MATRIX_LEAVE) |
-                                        .bridge.provisioning.enabled = env(SIGNAL_PROVISIONING_ENABLE) |
-                                        .bridge.provisioning.prefix = env(SIGNAL_PROVISIONING_PREFIX) |
-                                        .bridge.provisioning.segment_key = env(SIGNAL_PROVISIONING_SEGMENT_KEY) |
-                                        .bridge.command_prefix = "'$(echo ${SIGNAL_COMMAND_PREFIX})'" |
-                                        .bridge.management_room_text.welcome = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME) |
-                                        .bridge.management_room_text.welcome_connected = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_CONNECTED) |
-                                        .bridge.management_room_text.welcome_unconnected = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_UNCONNECTED) |
-                                        .bridge.management_room_text.additional_help = env(SIGNAL_MANAGEMENT_ROOM_TEXT_ADDITIONAL_HELP) |
-                                        .bridge.management_multiple_messages = env(SIGNAL_MANAGEMENT_ROOM_MULTIPLE_MESSAGES) |
-                                    ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+        if var_true "${SIGNAL_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = strenv(SIGNAL_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = strenv(SIGNAL_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.contact_list_names = env(SIGNAL_ALLOW_CONTACT_LIST_NAMES) |
+                                            .bridge.displayname_preference = [ "'$(echo ${SIGNAL_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
+                                            .bridge.autocreate_group_portal = env(SIGNAL_AUTOCREATE_GROUP_PORTAL) |
+                                            .bridge.autocreate_contact_portal = env(SIGNAL_AUTOCREATE_CONTACT_PORTAL) |
+                                            .bridge.public_portals = env(SIGNAL_PUBLIC_PORTALS) |
+                                            .bridge.sync_with_custom_puppets = env(SIGNAL_SYNC_WITH_CUSTOM_PUPPETS) |
+                                            .bridge.sync_direct_chat_list = env(SIGNAL_SYNC_DIRECT_CHAT_LIST) |
+                                            .bridge.double_puppet_allow_discovery = env(SIGNAL_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
+                                            .bridge.federate_rooms = env(SIGNAL_FEDERATE_ROOMS) |
+                                            .bridge.encryption.allow = env(SIGNAL_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(SIGNAL_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(SIGNAL_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(SIGNAL_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(SIGNAL_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(SIGNAL_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(SIGNAL_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(SIGNAL_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(SIGNAL_ENCRYPTION_ROTATION_MESSAGES) |
+                                            .bridge.private_chat_portal_meta = env(SIGNAL_PRIVATE_CHAT_PORTAL_META) |
+                                            .bridge.delivery_receipts = env(SIGNAL_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.delivery_error_reports = env(SIGNAL_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                            .bridge.message_status_events = env(SIGNAL_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.resend_bridge_info = env(SIGNAL_RESEND_BRIDGE_INFO) |
+                                            .bridge.periodic_reconnect.interval = env(SIGNAL_PERIODIC_RECONNECT_INTERVAL) |
+                                            .bridge.bridge_matrix_leave= = env(SIGNAL_BRIDGE_MATRIX_LEAVE) |
+                                            .bridge.provisioning.enabled = env(SIGNAL_PROVISIONING_ENABLE) |
+                                            .bridge.provisioning.prefix = env(SIGNAL_PROVISIONING_PREFIX) |
+                                            .bridge.provisioning.segment_key = env(SIGNAL_PROVISIONING_SEGMENT_KEY) |
+                                            .bridge.command_prefix = "'$(echo ${SIGNAL_COMMAND_PREFIX})'" |
+                                            .bridge.management_room_text.welcome = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME) |
+                                            .bridge.management_room_text.welcome_connected = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_CONNECTED) |
+                                            .bridge.management_room_text.welcome_unconnected = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_UNCONNECTED) |
+                                            .bridge.management_room_text.additional_help = env(SIGNAL_MANAGEMENT_ROOM_TEXT_ADDITIONAL_HELP) |
+                                            .bridge.management_multiple_messages = env(SIGNAL_MANAGEMENT_ROOM_MULTIPLE_MESSAGES) |
+                                        ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+        fi
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
         set -f
@@ -1534,30 +1558,32 @@ configure_slack() {
                                         .slack.browser_name = env(SLACK_BROWSER_NAME)
                                     ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = strenv(SLACK_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = strenv(SLACK_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.personal_filtering_spaces = env(SLACK_PERSONAL_FILTERING_SPACES) |
-                                        .bridge.delivery_receipts = env(SLACK_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.message_status_events = env(SLACK_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.message_error_notices = env(SLACK_ENABLE_MESSAGE_ERROR_NOTICES) |
-                                        .bridge.call_start_notices = env(SLACK_ENABLE_CALL_START_NOTICES) |
-                                        .bridge.identity_change_notices = env(SLACK_ENABLE_IDENTITY_CHANGE_NOTICES) |
-                                        .bridge.portal_message_buffer = env(SLACK_PORTAL_MESSAGE_BUFFER) |
-                                        .bridge.federate_rooms = env(SLACK_FEDERATE_ROOMS) |
-                                        .bridge.command_prefix = "'$(echo ${SLACK_COMMAND_PREFIX})'" |
-                                        .bridge.encryption.allow = env(SLACK_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(SLACK_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(SLACK_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(SLACK_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(SLACK_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(SLACK_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(SLACK_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(SLACK_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(SLACK_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(SLACK_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(SLACK_ENCRYPTION_ROTATION_MESSAGES)
-                                    ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+        if var_true "${SLACK_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = strenv(SLACK_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = strenv(SLACK_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.personal_filtering_spaces = env(SLACK_PERSONAL_FILTERING_SPACES) |
+                                            .bridge.delivery_receipts = env(SLACK_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.message_status_events = env(SLACK_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.message_error_notices = env(SLACK_ENABLE_MESSAGE_ERROR_NOTICES) |
+                                            .bridge.call_start_notices = env(SLACK_ENABLE_CALL_START_NOTICES) |
+                                            .bridge.identity_change_notices = env(SLACK_ENABLE_IDENTITY_CHANGE_NOTICES) |
+                                            .bridge.portal_message_buffer = env(SLACK_PORTAL_MESSAGE_BUFFER) |
+                                            .bridge.federate_rooms = env(SLACK_FEDERATE_ROOMS) |
+                                            .bridge.command_prefix = "'$(echo ${SLACK_COMMAND_PREFIX})'" |
+                                            .bridge.encryption.allow = env(SLACK_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(SLACK_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(SLACK_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(SLACK_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(SLACK_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(SLACK_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(SLACK_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(SLACK_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(SLACK_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(SLACK_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(SLACK_ENCRYPTION_ROTATION_MESSAGES)
+                                        ' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
+        fi
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
         set -f
@@ -1786,52 +1812,120 @@ configure_telegram() {
                                         .manhole.whitelist = [ "'$(echo ${TELEGRAM_MANHOLE_WHITELIST//,/\",\"})'" ]
                                     ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = strenv(TELEGRAM_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = strenv(TELEGRAM_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.displayname_preference = [ "'$(echo ${TELEGRAM_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
-                                        .bridge.command_prefix = "'$(echo ${TELEGRAM_COMMAND_PREFIX})'" |
-                                        .bridge.invite_own_puppet_to_pm = env(TELEGRAM_INVITE_OWN_PUPPET_TO_PM) |
-                                        .bridge.sync_direct_chat_list = env(TELEGRAM_SYNC_DIRECT_CHAT_LIST) |
-                                        .bridge.presence_from_facebook = env(TELEGRAM_BRIDGE_PRESENCE) |
-                                        .bridge.update_avatar_initial_sync = env(TELEGRAM_SYNC_UPDATE_AVATAR) |
-                                        .bridge.delivery_receipts = env(TELEGRAM_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.delivery_error_reports = env(TELEGRAM_ENABLE_DELIVERY_ERROR_REPORTS) |
-                                        .bridge.message_status_events = env(TELEGRAM_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.allow_invites = env(TELEGRAM_ALLOW_INVITES) |
-                                        .bridge.federate_rooms = env(TELEGRAM_FEDERATE_ROOMS) |
-                                        .bridge.backfill.enable = env(TELEGRAM_BACKFILL_ENABLE) |
-                                        .bridge.backfill.msc2716 = env(TELEGRAM_BACKFILL_ENABLE_MSC2716) |
-                                        .bridge.backfill.max_conversations = env(TELEGRAM_BACKFILL_MAX_CONVERSATIONS) |
-                                        .bridge.backfill.min_sync_thread_delay = env(TELEGRAM_BACKFILL_SYNC_THREAD_DELAY) |
-                                        .bridge.backfill.unread_hours_threshold = env(TELEGRAM_BACKFILL_UNREAD_HOURS_THRESHOLD) |
-                                        .bridge.periodic_reconnect.interval = env(TELEGRAM_PERIODIC_RECONNECT_INTERVAL) |
-                                        .bridge.periodic_reconnect.refresh = env(TELEGRAM_PERIODIC_RECONNECT_MODE) |
-                                        .bridge.periodic_reconnect.always = env(TELEGRAM_PERIODIC_RECONNECT_ALWAYS) |
-                                        .bridge.periodic_reconnect.min_connected_time = env(TELEGRAM_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
-                                        .bridge.resync_max_disconnected_time = env(TELEGRAM_RESYNC_MAX_DISCONNECTED_TIME) |
-                                        .bridge.sync_on_startup = env(TELEGRAM_SYNC_ON_STARTUP) |
-                                        .bridge.temporary_disconnect_notices = env(TELEGRAM_TEMPORARY_DISCONNECT_NOTICES) |
-                                        .bridge.on_reconnection_fail.action = env(TELEGRAM_RECONNECTION_FAIL_ACTION) |
-                                        .bridge.on_reconnection_fail.wait_for = env(TELEGRAM_RECONNECTION_FAIL_WAIT) |
-                                        .bridge.disable_bridge_notices = env(TELEGRAM_DISABLE_BRIDGE_NOTICES) |
-                                        .bridge.resend_bridge_info = env(TELEGRAM_RESEND_BRIDGE_INFO) |
-                                        .bridge.mute_bridging = env(TELEGRAM_MUTE_BRIDGING) |
-                                        .bridge.tag_only_on_create = env(TELEGRAM_TAG_ONLY_ON_CREATE) |
-                                        .bridge.sandbox_media_download = env(TELEGRAM_SANDBOX_MEDIA_DOWNLOAD) |
-                                        .bridge.get_proxy_api_url = env(TELEGRAM_GET_PROXY_API_URL) |
-                                        .bridge.encryption.allow = env(TELEGRAM_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(TELEGRAM_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(TELEGRAM_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(TELEGRAM_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(TELEGRAM_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(TELEGRAM_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(TELEGRAM_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(TELEGRAM_ENCRYPTION_ROTATION_MESSAGES)
-                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+        if var_true "${TELEGRAM_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = env(TELEGRAM_TEMPLATE_USERNAME) |
+                                            .bridge.alias_template = env(TELEGRAM_TEMPLATE_ALIAS) |
+                                            .bridge.displayname_template = env(TELEGRAM_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.displayname_preference = [ "'$(echo ${TELEGRAM_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] | |
+                                            .bridge.displayname_max_length = env(TELEGRAM_TEMPLATE_DISPLAYNAME_MAX_LENGTH) |
+                                            .bridge.allow_avatar_remove = env(TELEGRAM_ALLOW_AVATAR_REMOVE) |
+                                            .bridge.allow_contact_info = env(TELEGRAM_ALLOW_CONTACT_INFO) |
+                                            .bridge.max_initial_member_sync = env(TELEGRAM_MAX_INITIAL_MEMBER_SYNC) |
+                                            .bridge.max_member_count = env(TELEGRAM_MAX_MEMBER_COUNT) |
+                                            .bridge.sync_channel_members = env(TELEGRAM_SYNC_CHANNEL_MEMBERS) |
+                                            .bridge.skip_deleted_members = env(TELEGRAM_SKIP_DELETED_MEMBERS) |
+                                            .bridge.startup_sync = env(TELEGRAM_STARTUP_SYNC) |
+                                            .bridge.sync_update_limit = env(TELEGRAM_SYNC_UPDATE_LIMIT) |
+                                            .bridge.sync_create_limit = env(TELEGRAM_SYNC_CREATE_LIMIT) |
+                                            .bridge.sync_deferred_create_all = env(TELEGRAM_SYNC_DEFERRED_CREATE_ALL) |
+                                            .bridge.sync_direct_chats = env(TELEGRAM_SYNC_DIRECT_CHATS) |
+                                            .bridge.max_telegram_delete = env(TELEGRAM_MAX_TELEGRAM_DELETE) |
+                                            .bridge.sync_matrix_state = env(TELEGRAM_SYNC_MATRIX_STATE) |
+                                            .bridge.allow_matrix_login = env(TELEGRAM_ALLOW_MATRIX_LOGIN) |
+                                            .bridge.public_portals = env(TELEGRAM_PUBLIC_PORTALS) |
+                                            .bridge.sync_with_custom_puppets = env(TELEGRAM_SYNC_WITH_CUSTOM_PUPPETS) |
+                                            .bridge.sync_direct_chat_list = env(TELEGRAM_SYNC_DIRECT_CHAT_LIST) |
+                                            .bridge.double_puppet_allow_discovery = env(TELEGRAM_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
+                                            .bridge.telegram_link_preview = env(TELEGRAM_LINK_PREVIEW) |
+                                            .bridge.invite_link_resolve = env(TELEGRAM_INVITE_LINK_RESOLVE) |
+                                            .bridge.caption_in_message = env(TELEGRAM_CAPTION_IN_MESSAGE) |
+                                            .bridge.image_as_file_size = env(TELEGRAM_IMAGE_AS_FILE_SIZE) |
+                                            .bridge.image_as_file_pixels = env(TELEGRAM_IMAGE_AS_FILE_PIXELS) |
+                                            .bridge.parallel_file_transfer = env(TELEGRAM_PARALLEL_FILE_TRANSFER) |
+                                            .bridge.federate_rooms = env(TELEGRAM_FEDERATE_ROOMS) |
+                                            .bridge.always_custom_emoji_reaction = env(TELEGRAM_ALWAYS_CUSTOM_EMOJI_REACTION) |
+                                            .bridge.animated_sticker.target = env(TELEGRAM_ANIMATED_STICKER_TARGET) |
+                                            .bridge.animated_sticker.convert_from_webm = env(TELEGRAM_ANIMATED_STICKER_CONVERT_FROM_WEBM) |
+                                            .bridge.animated_sticker.args.width = env(TELEGRAM_ANIMATED_STICKER_ARGS_WIDTH) |
+                                            .bridge.animated_sticker.args.height = env(TELEGRAM_ANIMATED_STICKER_ARGS_HEIGHT) |
+                                            .bridge.animated_emoji.target = env(TELEGRAM_ANIMATED_EMOJI_TARGET) |
+                                            .bridge.animated_emoji.args.width = env(TELEGRAM_ANIMATED_EMOJI_ARGS_WIDTH) |
+                                            .bridge.animated_emoji.args.height = env(TELEGRAM_ANIMATED_EMOJI_ARGS_HEIGHT) |
+                                            .bridge.animated_emoji.args.fps = env(TELEGRAM_ANIMATED_EMOJI_FPS) |
+                                            .bridge.encryption.allow = env(TELEGRAM_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(TELEGRAM_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(TELEGRAM_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(TELEGRAM_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(TELEGRAM_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(TELEGRAM_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(TELEGRAM_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(TELEGRAM_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(TELEGRAM_ENCRYPTION_ROTATION_MESSAGES)
+                                            .bridge.private_chat_portal_meta = env(TELEGRAM_PRIVATE_CHAT_PORTAL_META) |
+                                            .bridge.delivery_receipts = env(TELEGRAM_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.delivery_error_reports = env(TELEGRAM_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                            .bridge.message_status_events = env(TELEGRAM_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.resend_bridge_info = env(TELEGRAM_RESEND_BRIDGE_INFO) |
+                                            .bridge.mute_bridging = env(TELEGRAM_MUTE_BRIDGING) |
+                                            .bridge.pinned_tag = env(TELEGRAM_PINNED_TAG) |
+                                            .bridge.archive_tag = env(TELEGRAM_ARCHIVE_TAG) |
+                                            .bridge.tag_only_on_create = env(TELEGRAM_TAG_ONLY_ON_CREATE) |
+                                            .bridge.bridge_matrix_leave = env(TELEGRAM_BRIDGE_MATRIX_LEAVE) |
+                                            .bridge.kick_on_logout = env(TELEGRAM_KICK_ON_LOGOUT) |
+                                            .bridge.always_read_joined_telegram_notice = env(TELEGRAM_ALWAYS_READ_JOINED_TELEGRAM_NOTICE) |
+                                            .bridge.create_group_on_invite = env(TELEGRAM_CREATE_GROUP_ON_INVITE) |
+                                            .bridge.backfill.enable = env(TELEGRAM_BACKFILL_ENABLE) |
+                                            .bridge.backfill.msc2716 = env(TELEGRAM_BACKFILL_ENABLE_MSC2716) |
+                                            .bridge.backfill.double_puppet_backfill = env(TELEGRAM_BACKFILL_DOUBLE_PUPPET) |
+                                            .bridge.backfill.normal_groups = env(TELEGRAM_BACKFILL_NORMAL_GROUPS) |
+                                            .bridge.backfill.unread_hours_threshold = env(TELEGRAM_BACKFILL_UNREAD_HOURS_THRESHOLD) |
+                                            .bridge.backfill.forward.initial_limit = env(TELEGRAM_BACKFILL_FORWARD_INITIAL_LIMIT) |
+                                            .bridge.backfill.forward.sync_limit = env(TELEGRAM_BACKFILL_FORWARD_SYNC_LIMIT) |
+                                            .bridge.backfill.incremental.messages_per_batch = env(TELEGRAM_BACKFILL_INCREMENTAL_MESSAGES_PER_BATCH) |
+                                            .bridge.backfill.incremental.post_batch_delay = env(TELEGRAM_BACKFILL_INCREMENTAL_POST_BATCH_DELAY) |
+                                            .bridge.backfill.incremental.max_batches.user = env(TELEGRAM_BACKFILL_INCREMENTAL_MAX_BATCHES_USER) |
+                                            .bridge.backfill.incremental.max_batches.normal_group = env(TELEGRAM_BACKFILL_INCREMENTAL_MAX_BATCHES_NORMAL_GROUP) |
+                                            .bridge.backfill.incremental.max_batches.supergroup = env(TELEGRAM_BACKFILL_INCREMENTAL_MAX_BATCHES_SUPERGROUP) |
+                                            .bridge.backfill.incremental.max_batches.channel = env(TELEGRAM_BACKFILL_INCREMENTAL_MAX_BATCHES_CHANNEL) |
+                                            .bridge.initial_power_level_overrides.user = env(TELEGRAM_BACKFILL_INITIAL_POWER_LEVEL_OVERRIDES_USER) |
+                                            .bridge.initial_power_level_overrides.group = env(TELEGRAM_BACKFILL_INITIAL_POWER_LEVEL_OVERRIDES_GROUP) |
+                                            .bridge.bot_messages_as_notices = env(TELEGRAM_BOT_MESSAGES_AS_NOTICES) |
+                                            .bridge.bridge_notices.default = env(TELEGRAM_BRIDGE_NOTICES_DEFAULT) |
+                                            .bridge.bridge_notices.exceptions = env(TELEGRAM_BRIDGE_NOTICES_EXCEPTIONS) |
+                                            .bridge.relay_user_distinguishers = env(TELEGRAM_RELAY_USER_DISTINGUISHERS) |
+                                            .bridge.message_formats.m.text = env(TELEGRAM_MESSAGE_FORMATS_M_TEXT) |
+                                            .bridge.message_formats.m.notice = env(TELEGRAM_MESSAGE_FORMATS_M_NOTICE) |
+                                            .bridge.message_formats.m.emote = env(TELEGRAM_MESSAGE_FORMATS_M_EMOTE |
+                                            .bridge.message_formats.m.file = env(TELEGRAM_MESSAGE_FORMATS_M_FILE) |
+                                            .bridge.message_formats.m.image = env(TELEGRAM_MESSAGE_FORMATS_M_IMAGE) |
+                                            .bridge.message_formats.m.audio = env(TELEGRAM_MESSAGE_FORMATS_M_AUDIO) |
+                                            .bridge.message_formats.m.video = env(TELEGRAM_MESSAGE_FORMATS_M_VIDEO) |
+                                            .bridge.message_formats.m.location = env(TELEGRAM_MESSAGE_FORMATS_M_LOCATION) |
+                                            .bridge.emote_format = env(TELEGRAM_EMOTE_FORMAT) |
+                                            .bridge.state_event_formats.join = env(TELEGRAM_STATE_EVENT_FORMATS_JOIN) |
+                                            .bridge.state_event_formats.leave = env(TELEGRAM_STATE_EVENT_FORMATS_LEAVE) |
+                                            .bridge.state_event_formats.name_change = env(TELEGRAM_STATE_EVENT_FORMATS_NAME_CHANGE) |
+                                            .bridge.filter.mode = env(TELEGRAM_FILTER_MODE) |
+                                            .bridge.filter.list = env(TELEGRAM_FILTER_LIST) |
+                                            .bridge.command_prefix = "'$(echo ${TELEGRAM_COMMAND_PREFIX})'" |
+                                            .bridge.management_room_text.welcome = env(TELEGRAM_MANAGEMENT_ROOM_TEXT_WELCOME) |
+                                            .bridge.management_room_text.welcome_connected = env(TELEGRAM_MANAGEMENT_ROOM_TEXT_CONNECTED) |
+                                            .bridge.management_room_text.welcome_unconnected = env(TELEGRAM_MANAGEMENT_ROOM_TEXT_UNCONNECTED) |
+                                            .bridge.management_room_text.additional_help = env(TELEGRAM_MANAGEMENT_ROOM_TEXT_ADDITIONAL_HELP) |
+                                            .bridge.management_room_multiple_messages = env(TELEGRAM_MANAGEMENT_ROOM_MULTIPLE_MESSAGES) |
+                                            .bridge.relaybot.privatechat.invite = env(TELEGRAM_RELAYBOT_PRIVATECHAT_INVITE) |
+                                            .bridge.relaybot.privatechat.state_changes = env(TELEGRAM_RELAYBOT_PRIVATECHAT_STATE_CHANGES) |
+                                            .bridge.relaybot.privatechat.message = env(TELEGRAM_RELAYBOT_PRIVATECHAT_MESSAGE) |
+                                            .bridge.group_chat_invite = env(TELEGRAM_GROUP_CHAT_INVITE) |
+                                            .bridge.ignore_unbridged_group_chat = env(TELEGRAM_IGNORE_UNBRIDGED_GROUP_CHAT) |
+                                            .bridge.authless_portals = env(TELEGRAM_AUTHLESS_PORTALS) |
+                                            .bridge.whitelist_group_admins = env(TELEGRAM_WHITELIST_GROUP_ADMINS) |
+                                            .bridge.ignore_own_incoming_events = env(TELEGRAM_IGNORE_OWN_INCOMING_EVENTS) |
+                                        ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
+        fi
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
         set -f
@@ -1881,6 +1975,35 @@ configure_telegram() {
         if grep -q "PLACEHOLDERASTERISK" "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}" ; then
             s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
         fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .telegram.api_id = env(TELEGRAM_API_ID) |
+                                        .telegram.api_hash = env(TELEGRAM_API_HASH) |
+                                        .telegram.bot_token = env(TELEGRAM_BOT_TOKEN) |
+                                        .telegram.catch_up = env(TELEGRAM_CATCH_UP) |
+                                        .telegram.sequential_updates = env(TELEGRAM_SEQUENTIAL_UPDATES) |
+                                        .telegram.exit_on_update_error = env(TELEGRAM_EXIT_ON_UPDATE_ERROR) |
+                                        .telegram.connection.timeout = env(TELEGRAM_CONNECTION_TIMEOUT) |
+                                        .telegram.connection.retries = env(TELEGRAM_CONNECTION_RETRIES) |
+                                        .telegram.connection.retry_delay = env(TELEGRAM_CONNECTION_RETRY_DELAY) |
+                                        .telegram.connection.flood_sleep_threshold = env(TELEGRAM_CONNECTION_FLOOD_SLEEP_THRESHOLD) |
+                                        .telegram.connection.request_retries = env(TELEGRAM_CONNECTION_REQUEST_RETRIES) |
+                                        .telegram.device_info.device_model = env(TELEGRAM_DEVICE_MODEL) |
+                                        .telegram.device_info.system_version = env(TELEGRAM_DEVICE_SYSTEM_VERSION) |
+                                        .telegram.device_info.app_version = env(TELEGRAM_DEVICE_APP_VERSION) |
+                                        .telegram.device_info.lang_code = env(TELEGRAM_DEVICE_LANG_CODE) |
+                                        .telegram.device_info.system_lang_code = env(TELEGRAM_DEVICE_SYSTEM_LANG_CODE) |
+                                        .telegram.server.enabled = env(TELEGRAM_SERVER_ENABLED) |
+                                        .telegram.server.dc = env(TELEGRAM_SERVER_DC) |
+                                        .telegram.server.ip = env(TELEGRAM_SERVER_IP) |
+                                        .telegram.server.port = env(TELEGRAM_SERVER_PORT) |
+                                        .telegram.proxy.type = env(TELEGRAM_PROXY_TYPE) |
+                                        .telegram.proxy.address = env(TELEGRAM_PROXY_ADDRESS) |
+                                        .telegram.proxy.port = env(TELEGRAM_PROXY_PORT) |
+                                        .telegram.proxy.rdns = env(TELEGRAM_PROXY_RDNS) |
+                                        .telegram.proxy.username = env(TELEGRAM_PROXY_USER) |
+                                        .telegram.proxy.password = env(TELEGRAM_PROXY_PASS) |
+                                    ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
 
         case "${TELEGRAM_LOG_TYPE,,}" in
             "both" )
@@ -2057,52 +2180,43 @@ configure_twitter() {
                                         .manhole.whitelist = [ "'$(echo ${TWITTER_MANHOLE_WHITELIST//,/\",\"})'" ]
                                     ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = strenv(TWITTER_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = strenv(TWITTER_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.displayname_preference = [ "'$(echo ${TWITTER_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
-                                        .bridge.command_prefix = "'$(echo ${TWITTER_COMMAND_PREFIX})'" |
-                                        .bridge.invite_own_puppet_to_pm = env(TWITTER_INVITE_OWN_PUPPET_TO_PM) |
-                                        .bridge.sync_direct_chat_list = env(TWITTER_SYNC_DIRECT_CHAT_LIST) |
-                                        .bridge.presence_from_twitter = env(TWITTER_BRIDGE_PRESENCE) |
-                                        .bridge.update_avatar_initial_sync = env(TWITTER_SYNC_UPDATE_AVATAR) |
-                                        .bridge.delivery_receipts = env(TWITTER_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.delivery_error_reports = env(TWITTER_ENABLE_DELIVERY_ERROR_REPORTS) |
-                                        .bridge.message_status_events = env(TWITTER_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.allow_invites = env(TWITTER_ALLOW_INVITES) |
-                                        .bridge.federate_rooms = env(TWITTER_FEDERATE_ROOMS) |
-                                        .bridge.backfill.enable = env(TWITTER_BACKFILL_ENABLE) |
-                                        .bridge.backfill.msc2716 = env(TWITTER_BACKFILL_ENABLE_MSC2716) |
-                                        .bridge.backfill.max_conversations = env(TWITTER_BACKFILL_MAX_CONVERSATIONS) |
-                                        .bridge.backfill.min_sync_thread_delay = env(TWITTER_BACKFILL_SYNC_THREAD_DELAY) |
-                                        .bridge.backfill.unread_hours_threshold = env(TWITTER_BACKFILL_UNREAD_HOURS_THRESHOLD) |
-                                        .bridge.periodic_reconnect.interval = env(TWITTER_PERIODIC_RECONNECT_INTERVAL) |
-                                        .bridge.periodic_reconnect.refresh = env(TWITTER_PERIODIC_RECONNECT_MODE) |
-                                        .bridge.periodic_reconnect.always = env(TWITTER_PERIODIC_RECONNECT_ALWAYS) |
-                                        .bridge.periodic_reconnect.min_connected_time = env(TWITTER_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
-                                        .bridge.resync_max_disconnected_time = env(TWITTER_RESYNC_MAX_DISCONNECTED_TIME) |
-                                        .bridge.sync_on_startup = env(TWITTER_SYNC_ON_STARTUP) |
-                                        .bridge.temporary_disconnect_notices = env(TWITTER_TEMPORARY_DISCONNECT_NOTICES) |
-                                        .bridge.on_reconnection_fail.action = env(TWITTER_RECONNECTION_FAIL_ACTION) |
-                                        .bridge.on_reconnection_fail.wait_for = env(TWITTER_RECONNECTION_FAIL_WAIT) |
-                                        .bridge.disable_bridge_notices = env(TWITTER_DISABLE_BRIDGE_NOTICES) |
-                                        .bridge.resend_bridge_info = env(TWITTER_RESEND_BRIDGE_INFO) |
-                                        .bridge.mute_bridging = env(TWITTER_MUTE_BRIDGING) |
-                                        .bridge.tag_only_on_create = env(TWITTER_TAG_ONLY_ON_CREATE) |
-                                        .bridge.sandbox_media_download = env(TWITTER_SANDBOX_MEDIA_DOWNLOAD) |
-                                        .bridge.get_proxy_api_url = env(TWITTER_GET_PROXY_API_URL) |
-                                        .bridge.encryption.allow = env(TWITTER_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(TWITTER_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(TWITTER_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(TWITTER_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(TWITTER_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(TWITTER_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(TWITTER_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(TWITTER_ENCRYPTION_ROTATION_MESSAGES)
-                                    ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        if var_true "${TWITTER_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = env(TWITTER_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = env(TWITTER_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.displayname_max_length = env(TWITTER_DISPLAYNAME_MAX_LENGTH) |
+                                            .bridge.initial_conversation_sync = env(TWITTER_INITIAL_CONVERSATION_SYNC) |
+                                            .bridge.sync_with_custom_puppets = env(TWITTER_SYNC_WITH_CUSTOM_PUPPETS) |
+                                            .bridge.sync_direct_chat_list = env(TWITTER_SYNC_DIRECT_CHAT_LIST) |
+                                            .bridge.double_puppet_allow_discovery = env(TWITTER_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
+                                            .bridge.federate_rooms = env(TWITTER_FEDERATE_ROOMS) |
+                                            .bridge.backfill.invite_own_puppet = env(TWITTER_BACKFILL_INVITE_OWN_PUPPET) |  true
+                                            .bridge.backfill.initial_limit = env(TWITTER_BACKFILL_INITIAL_LIMIT) |  0
+                                            .bridge.backfill.disable_notifications = env(TWITTER_BACKFILL_DISABLE_NOTIFICATIONS) |  false
+                                            .bridge.backfill.backwards = env(TWITTER_BACKFILL_BACKWARDS) |  false
+                                            .bridge.encryption.allow = env(TWITTER_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(TWITTER_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(TWITTER_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(TWITTER_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(TWITTER_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(TWITTER_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(TWITTER_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(TWITTER_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(TWITTER_ENCRYPTION_ROTATION_MESSAGES) |
+                                            .bridge.private_chat_portal_meta = env(TWITTER_PRIVATE_CHAT_PORTAL_META) |
+                                            .bridge.delivery_receipts = env(TWITTER_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.delivery_error_reports = env(TWITTER_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                            .bridge.message_status_events = env(TWITTER_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.temporary_disconnect_notices = env(TWITTER_TEMPORARY_DISCONNECT_NOTICES) |
+                                            .bridge.disable_bridge_notices = env(TWITTER_DISABLE_BRIDGE_NOTICES) |
+                                            .bridge.error_sleep = env(TWITTER_ERROR_SLEEP) |
+                                            .bridge.max_poll_errors = env(TWITTER_MAX_POLL_ERRORS) |
+                                            .bridge.resend_bridge_info = env(TWITTER_RESEND_BRIDGE_INFO) |
+                                            .bridge.command_prefix = "'$(echo ${TWITTER_COMMAND_PREFIX})'"
+                                        ' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
+        fi
 
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${TWITTER_CONFIG_PATH}"/"${TWITTER_CONFIG_FILE}"
         set -f
@@ -2335,31 +2449,32 @@ configure_whatsapp() {
                                         .whatsapp.browser_name = env(WHATSAPP_BROWSER_NAME)
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
-        s6-setuidgid matrix yq -i   '
-                                        .bridge.username_template = strenv(WHATSAPP_TEMPLATE_USERNAME) |
-                                        .bridge.displayname_template = strenv(WHATSAPP_TEMPLATE_DISPLAYNAME) |
-                                        .bridge.personal_filtering_spaces = env(WHATSAPP_PERSONAL_FILTERING_SPACES) |
-                                        .bridge.delivery_receipts = env(WHATSAPP_ENABLE_DELIVERY_RECEIPTS) |
-                                        .bridge.message_status_events = env(WHATSAPP_ENABLE_MESSAGE_STATUS_EVENTS) |
-                                        .bridge.message_error_notices = env(WHATSAPP_ENABLE_MESSAGE_ERROR_NOTICES) |
-                                        .bridge.call_start_notices = env(WHATSAPP_ENABLE_CALL_START_NOTICES) |
-                                        .bridge.identity_change_notices = env(WHATSAPP_ENABLE_IDENTITY_CHANGE_NOTICES) |
-                                        .bridge.portal_message_buffer = env(WHATSAPP_PORTAL_MESSAGE_BUFFER) |
-                                        .bridge.federate_rooms = env(WHATSAPP_FEDERATE_ROOMS) |
-                                        .bridge.command_prefix = "'$(echo ${WHATSAPP_COMMAND_PREFIX})'" |
-                                        .bridge.encryption.allow = env(WHATSAPP_ENCRYPTION_ALLOW) |
-                                        .bridge.encryption.default = env(WHATSAPP_ENCRYPTION_DEFAULT) |
-                                        .bridge.encryption.appservice = env(WHATSAPP_ENCRYPTION_APPSERVICE) |
-                                        .bridge.encryption.require = env(WHATSAPP_ENCRYPTION_REQUIRE) |
-                                        .bridge.encryption.allow_key_sharing = env(WHATSAPP_ENCRYPTION_ALLOW_KEY_SHARING) |
-                                        .bridge.encryption.verification_levels.receive = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
-                                        .bridge.encryption.verification_levels.send = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SEND) |
-                                        .bridge.encryption.verification_levels.share = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SHARE) |
-                                        .bridge.encryption.rotation.enable_custom = env(WHATSAPP_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
-                                        .bridge.encryption.rotation.milliseconds = env(WHATSAPP_ENCRYPTION_ROTATION_MILLISECONDS) |
-                                        .bridge.encryption.rotation.messages = env(WHATSAPP_ENCRYPTION_ROTATION_MESSAGES)
-                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-
+        if var_true "${DISCORD_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = strenv(WHATSAPP_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = strenv(WHATSAPP_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.personal_filtering_spaces = env(WHATSAPP_PERSONAL_FILTERING_SPACES) |
+                                            .bridge.delivery_receipts = env(WHATSAPP_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.message_status_events = env(WHATSAPP_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.message_error_notices = env(WHATSAPP_ENABLE_MESSAGE_ERROR_NOTICES) |
+                                            .bridge.call_start_notices = env(WHATSAPP_ENABLE_CALL_START_NOTICES) |
+                                            .bridge.identity_change_notices = env(WHATSAPP_ENABLE_IDENTITY_CHANGE_NOTICES) |
+                                            .bridge.portal_message_buffer = env(WHATSAPP_PORTAL_MESSAGE_BUFFER) |
+                                            .bridge.federate_rooms = env(WHATSAPP_FEDERATE_ROOMS) |
+                                            .bridge.command_prefix = "'$(echo ${WHATSAPP_COMMAND_PREFIX})'" |
+                                            .bridge.encryption.allow = env(WHATSAPP_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(WHATSAPP_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(WHATSAPP_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(WHATSAPP_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(WHATSAPP_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(WHATSAPP_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(WHATSAPP_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(WHATSAPP_ENCRYPTION_ROTATION_MESSAGES)
+                                        ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+        fi
         s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
         set -f
 
