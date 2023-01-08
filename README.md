@@ -696,7 +696,7 @@ Telegram chat bridge provided by [Mautrix Telegram Bridge](https://github.com/ma
 | `TELEGRAM_MANAGEMENT_ROOM_TEXT_UNCONNECTED`              |             | `Use \`help\` for help or \`login\` to log in.`                                                        |
 | `TELEGRAM_MANAGEMENT_ROOM_TEXT_WELCOME`                  |             | `Hello, I'm a Telegram bridge bot.`                                                                    |
 | `TELEGRAM_MAX_INITIAL_MEMBER_SYNC                        |             | `100`                                                                                                  |
-| `TELEGRAM_MAX_MEMBER_COUNT`                              |          | `1` |
+| `TELEGRAM_MAX_MEMBER_COUNT`                              |             | `1`                                                                                                    |
 | `TELEGRAM_MAX_TELEGRAM_DELETE`                           |             | `10`                                                                                                   |
 | `TELEGRAM_MESSAGE_FORMATS_M_AUDIO`                       |             | `\$distinguisher <b>\$sender_displayname</b> sent an audio file: \$message`                            |
 | `TELEGRAM_MESSAGE_FORMATS_M_EMOTE`                       |             | `* \$distinguisher <b>\$sender_displayname</b>: \$message`                                             |
@@ -832,75 +832,76 @@ Twitter chat bridge provided by [Mautrix Twitter Bridge](https://github.com/maut
 Whatsapp bridge provided by [Mautrix Whatsapp Bridge](https://github.com/mautrix/whatsapp)
 
 
-| Variable | Description | Default |
-| -------- | ----------- | ------- || `WHATSAPP_APPSERVICE_ID` | | `whatsapp` |
-| `WHATSAPP_BOT_AVATAR` | | `mxc://maunium.net/NeXNQarUbrlYBiPCpprYsRqr` |
-| `WHATSAPP_BOT_DISPLAYNAME` | | `Whatsapp bridge bot` |
-| `WHATSAPP_BOT_USERNAME` | | `whatsappbot` |
-| `WHATSAPP_BROWSER_NAME` | | `unknown` |
-| `WHATSAPP_COMMAND_PREFIX` | | `!wa` |
-| `WHATSAPP_CONFIG_FILE` | | `whatsapp.yaml` |
-| `WHATSAPP_CONFIG_PATH` | | `${CONFIG_PATH}` |
-| `WHATSAPP_CONFIGURE_BRIDGE` | | `TRUE` |
-| `WHATSAPP_DATA_PATH` | | `${DATA_PATH}/whatsapp/` |
-| `WHATSAPP_DB_CONNECTIONS_MAX_IDLE` | | `2` |
-| `WHATSAPP_DB_CONNECTIONS_MAX_IDLE_LIFETIME` | | `null` |
-| `WHATSAPP_DB_CONNECTIONS_MAX_LIFETIME` | | `null` |
-| `WHATSAPP_DB_CONNECTIONS_MAX_OPEN` | | `20` |
-| `WHATSAPP_DB_ENABLE_TLS` | | `FALSE` |
-| `WHATSAPP_DB_PORT` | | `5432` |
-| `WHATSAPP_DB_SQLITE_FILE` | | `whatsapp.db` |
-| `WHATSAPP_DB_SQLITE_PATH` | | `${DB_SQLITE_PATH}` |
-| `WHATSAPP_DB_TYPE` | | `SQLITE` |
-| `WHATSAPP_ENABLE_ASYNC_TRANSACTIONS` | | `FALSE` |
-| `WHATSAPP_ENABLE_CALL_START_NOTICES` | | `TRUE` |
-| `WHATSAPP_ENABLE_DELIVERY_RECEIPTS` | | `FALSE` |
-| `WHATSAPP_ENABLE_EPHEMERAL_EVENTS` | | `TRUE` |
-| `WHATSAPP_ENABLE_IDENTITY_CHANGE_NOTICES` | | `FALSE` |
-| `WHATSAPP_ENABLE_MANHOLE` | | `FALSE` |
-| `WHATSAPP_ENABLE_MESSAGE_ERROR_NOTICES` | | `FALSE` |
-| `WHATSAPP_ENABLE_MESSAGE_STATUS_EVENTS` | | `FALSE` |
-| `WHATSAPP_ENABLE_METRICS` | | `FALSE` |
-| `WHATSAPP_ENCRYPTION_ALLOW` | | `FALSE` |
-| `WHATSAPP_ENCRYPTION_ALLOW_KEY_SHARING` | | `FALSE` |
-| `WHATSAPP_ENCRYPTION_APPSERVICE` | | `FALSE` |
-| `WHATSAPP_ENCRYPTION_DEFAULT` | | `FALSE` |
-| `WHATSAPP_ENCRYPTION_REQUIRE` | | `FALSE` |
-| `WHATSAPP_ENCRYPTION_ROTATION_ENABLE_CUSTOM` | | `FALSE` |
-| `WHATSAPP_ENCRYPTION_ROTATION_MESSAGES` | | `100` |
-| `WHATSAPP_ENCRYPTION_ROTATION_MILLISECONDS` | | `604800000` |
-| `WHATSAPP_ENCRYPTION_VERIFY_LEVELS_RECEIVE` | | `unverified` |
-| `WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SEND` | | `unverified` |
-| `WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SHARE` | | `cross-signed-tofu` |
-| `WHATSAPP_FEDERATE_ROOMS` | | `TRUE` |
-| `WHATSAPP_HOMESERVER_ADDRESS` | | `${HOMESERVER_ADDRESS}` |
-| `WHATSAPP_HOMESERVER_DOMAIN` | | `${HOMESERVER_DOMAIN}` |
-| `WHATSAPP_HOMESERVER_ENABLE_ASYNC_UPLOADS` | | `${HOMESERVER_ENABLE_ASYNC_UPLOADS}` |
-| `WHATSAPP_HOMESERVER_HTTP_RETRY_COUNT` | | `${HOMESERVER_HTTP_RETRY_COUNT}` |
-| `WHATSAPP_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT` | | `null` |
-| `WHATSAPP_HOMESERVER_SOFTWARE` | | `${HOMESERVER_SOFTWARE}` |
-| `WHATSAPP_HOMESERVER_STATUS_ENDPOINT` | | `null` |
-| `WHATSAPP_HOMESERVER_TLS_VERIFY` | | `${HOMESERVER_TLS_VERIFY}` |
-| `WHATSAPP_INVITE_OWN_PUPPET_TO_PM` | | `` |
-| `WHATSAPP_LISTEN_IP` | | `0.0.0.0` |
-| `WHATSAPP_LISTEN_PORT` | | `29318` |
-| `WHATSAPP_LOG_FILE` | | `whatsapp.log` |
-| `WHATSAPP_LOG_LEVEL` | | `${LOG_LEVEL}` |
-| `WHATSAPP_LOG_PATH` | | `${LOG_PATH}` |
-| `WHATSAPP_LOG_TYPE` | | `${LOG_TYPE}` |
-| `WHATSAPP_METRICS_LISTEN_IP` | | `127.0.0.1` |
-| `WHATSAPP_METRICS_LISTEN_PORT` | | `9200` |
-| `WHATSAPP_OS_NAME` | | `Mautrix-WhatsApp bridge` |
-| `WHATSAPP_PERMISSIONS_ADMIN` | | `@admin:example.com` |
-| `WHATSAPP_PERMISSIONS_RELAY` | | `*` |
-| `WHATSAPP_PERMISSIONS_USER` | | `example.com` |
-| `WHATSAPP_PERSONAL_FILTERING_SPACES` | | `false` |
-| `WHATSAPP_PORTAL_MESSAGE_BUFFER` | | `128` |
-| `WHATSAPP_REGISTRATION_FILE` | | `whatsapp-registration.yaml` |
-| `WHATSAPP_REGISTRATION_PATH` | | `${REGISTRATION_PATH}` |
-| `WHATSAPP_SEGMENT_API_KEY` | | `null` |
-| `WHATSAPP_TEMPLATE_DISPLAYNAME` | | `{{if .BusinessName}}{{.BusinessName}}{{else if .PushName}}{{.PushName}}{{else}}{{.JID}}{{end}} (WA)` |
-| `WHATSAPP_TEMPLATE_USERNAME` | | `whatsapp_{{.}}` |
+| Variable                                               | Description | Default                                                                                               |
+| ------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------- |
+| `WHATSAPP_APPSERVICE_ID`                               |             | `whatsapp`                                                                                            |
+| `WHATSAPP_BOT_AVATAR`                                  |             | `mxc://maunium.net/NeXNQarUbrlYBiPCpprYsRqr`                                                          |
+| `WHATSAPP_BOT_DISPLAYNAME`                             |             | `Whatsapp bridge bot`                                                                                 |
+| `WHATSAPP_BOT_USERNAME`                                |             | `whatsappbot`                                                                                         |
+| `WHATSAPP_BROWSER_NAME`                                |             | `unknown`                                                                                             |
+| `WHATSAPP_COMMAND_PREFIX`                              |             | `!wa`                                                                                                 |
+| `WHATSAPP_CONFIG_FILE`                                 |             | `whatsapp.yaml`                                                                                       |
+| `WHATSAPP_CONFIG_PATH`                                 |             | `${CONFIG_PATH}`                                                                                      |
+| `WHATSAPP_CONFIGURE_BRIDGE`                            |             | `TRUE`                                                                                                |
+| `WHATSAPP_DATA_PATH`                                   |             | `${DATA_PATH}/whatsapp/`                                                                              |
+| `WHATSAPP_DB_CONNECTIONS_MAX_IDLE`                     |             | `2`                                                                                                   |
+| `WHATSAPP_DB_CONNECTIONS_MAX_IDLE_LIFETIME`            |             | `null`                                                                                                |
+| `WHATSAPP_DB_CONNECTIONS_MAX_LIFETIME`                 |             | `null`                                                                                                |
+| `WHATSAPP_DB_CONNECTIONS_MAX_OPEN`                     |             | `20`                                                                                                  |
+| `WHATSAPP_DB_ENABLE_TLS`                               |             | `FALSE`                                                                                               |
+| `WHATSAPP_DB_PORT`                                     |             | `5432`                                                                                                |
+| `WHATSAPP_DB_SQLITE_FILE`                              |             | `whatsapp.db`                                                                                         |
+| `WHATSAPP_DB_SQLITE_PATH`                              |             | `${DB_SQLITE_PATH}`                                                                                   |
+| `WHATSAPP_DB_TYPE`                                     |             | `SQLITE`                                                                                              |
+| `WHATSAPP_ENABLE_ASYNC_TRANSACTIONS`                   |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENABLE_CALL_START_NOTICES`                   |             | `TRUE`                                                                                                |
+| `WHATSAPP_ENABLE_DELIVERY_RECEIPTS`                    |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENABLE_EPHEMERAL_EVENTS`                     |             | `TRUE`                                                                                                |
+| `WHATSAPP_ENABLE_IDENTITY_CHANGE_NOTICES`              |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENABLE_MANHOLE`                              |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENABLE_MESSAGE_ERROR_NOTICES`                |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENABLE_MESSAGE_STATUS_EVENTS`                |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENABLE_METRICS`                              |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENCRYPTION_ALLOW`                            |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENCRYPTION_ALLOW_KEY_SHARING`                |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENCRYPTION_APPSERVICE`                       |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENCRYPTION_DEFAULT`                          |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENCRYPTION_REQUIRE`                          |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENCRYPTION_ROTATION_ENABLE_CUSTOM`           |             | `FALSE`                                                                                               |
+| `WHATSAPP_ENCRYPTION_ROTATION_MESSAGES`                |             | `100`                                                                                                 |
+| `WHATSAPP_ENCRYPTION_ROTATION_MILLISECONDS`            |             | `604800000`                                                                                           |
+| `WHATSAPP_ENCRYPTION_VERIFY_LEVELS_RECEIVE`            |             | `unverified`                                                                                          |
+| `WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SEND`               |             | `unverified`                                                                                          |
+| `WHATSAPP_ENCRYPTION_VERIFY_LEVELS_SHARE`              |             | `cross-signed-tofu`                                                                                   |
+| `WHATSAPP_FEDERATE_ROOMS`                              |             | `TRUE`                                                                                                |
+| `WHATSAPP_HOMESERVER_ADDRESS`                          |             | `${HOMESERVER_ADDRESS}`                                                                               |
+| `WHATSAPP_HOMESERVER_DOMAIN`                           |             | `${HOMESERVER_DOMAIN}`                                                                                |
+| `WHATSAPP_HOMESERVER_ENABLE_ASYNC_UPLOADS`             |             | `${HOMESERVER_ENABLE_ASYNC_UPLOADS}`                                                                  |
+| `WHATSAPP_HOMESERVER_HTTP_RETRY_COUNT`                 |             | `${HOMESERVER_HTTP_RETRY_COUNT}`                                                                      |
+| `WHATSAPP_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT` |             | `null`                                                                                                |
+| `WHATSAPP_HOMESERVER_SOFTWARE`                         |             | `${HOMESERVER_SOFTWARE}`                                                                              |
+| `WHATSAPP_HOMESERVER_STATUS_ENDPOINT`                  |             | `null`                                                                                                |
+| `WHATSAPP_HOMESERVER_TLS_VERIFY`                       |             | `${HOMESERVER_TLS_VERIFY}`                                                                            |
+| `WHATSAPP_INVITE_OWN_PUPPET_TO_PM`                     |             | ``                                                                                                    |
+| `WHATSAPP_LISTEN_IP`                                   |             | `0.0.0.0`                                                                                             |
+| `WHATSAPP_LISTEN_PORT`                                 |             | `29318`                                                                                               |
+| `WHATSAPP_LOG_FILE`                                    |             | `whatsapp.log`                                                                                        |
+| `WHATSAPP_LOG_LEVEL`                                   |             | `${LOG_LEVEL}`                                                                                        |
+| `WHATSAPP_LOG_PATH`                                    |             | `${LOG_PATH}`                                                                                         |
+| `WHATSAPP_LOG_TYPE`                                    |             | `${LOG_TYPE}`                                                                                         |
+| `WHATSAPP_METRICS_LISTEN_IP`                           |             | `127.0.0.1`                                                                                           |
+| `WHATSAPP_METRICS_LISTEN_PORT`                         |             | `9200`                                                                                                |
+| `WHATSAPP_OS_NAME`                                     |             | `Mautrix-WhatsApp bridge`                                                                             |
+| `WHATSAPP_PERMISSIONS_ADMIN`                           |             | `@admin:example.com`                                                                                  |
+| `WHATSAPP_PERMISSIONS_RELAY`                           |             | `*`                                                                                                   |
+| `WHATSAPP_PERMISSIONS_USER`                            |             | `example.com`                                                                                         |
+| `WHATSAPP_PERSONAL_FILTERING_SPACES`                   |             | `false`                                                                                               |
+| `WHATSAPP_PORTAL_MESSAGE_BUFFER`                       |             | `128`                                                                                                 |
+| `WHATSAPP_REGISTRATION_FILE`                           |             | `whatsapp-registration.yaml`                                                                          |
+| `WHATSAPP_REGISTRATION_PATH`                           |             | `${REGISTRATION_PATH}`                                                                                |
+| `WHATSAPP_SEGMENT_API_KEY`                             |             | `null`                                                                                                |
+| `WHATSAPP_TEMPLATE_DISPLAYNAME`                        |             | `{{if .BusinessName}}{{.BusinessName}}{{else if .PushName}}{{.PushName}}{{else}}{{.JID}}{{end}} (WA)` |
+| `WHATSAPP_TEMPLATE_USERNAME`                           |             | `whatsapp_{{.}}`                                                                                      |
 
 ### Networking
 
