@@ -54,12 +54,12 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"main"} \
     FACEBOOK_VERSION=${FACEBOOK_VERSION:-"v0.4.1"} \
     GOOGLECHAT_VERSION=${GOGGLECHAT_VERSION:-"v0.4.0"} \
     HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"2.5.0"} \
-    INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"v0.2.2"} \
+    INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"v0.2.3"} \
     SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.4.2"} \
     SLACK_VERSION=${SLACK_VERSION:-"main"} \
     TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.12.2"} \
     TWITTER_VERSION=${TWITTER_VERSION:-"v0.1.5"} \
-    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.8.0"} \
+    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.8.1"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
     FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     GOOGLECHAT_REPO_URL=https://github.com/mautrix/googlechat \
@@ -416,6 +416,7 @@ RUN source assets/functions/00-container && \
     rm -rf /root/.cache \
            /root/.gitconfig \
            /root/go \
+           /tmp/* \
            /usr/example-config.yaml \
            /usr/src/*
 
