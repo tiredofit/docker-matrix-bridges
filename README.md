@@ -255,6 +255,7 @@ Facebook bridge provided by [Mautrix Facebook Bridge](https://github.com/mautrix
 | `FACEBOOK_HOMESERVER_SOFTWARE`                         |                       | `${HOMESERVER_SOFTWARE}`                     |
 | `FACEBOOK_HOMESERVER_STATUS_ENDPOINT`                  |                       | `null`                                       |
 | `FACEBOOK_HOMESERVER_TLS_VERIFY`                       |                       | `${HOMESERVER_TLS_VERIFY}`                   |
+| `FACEBOOK_INITIAL_CHAT_SYNC` | | `3` |
 | `FACEBOOK_INVITE_OWN_PUPPET_TO_PM`                     |                       | `FALSE`                                      |
 | `FACEBOOK_LISTEN_IP`                                   |                       | `0.0.0.0`                                    |
 | `FACEBOOK_LISTEN_PORT`                                 |                       | `29319`                                      |

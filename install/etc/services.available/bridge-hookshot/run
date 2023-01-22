@@ -1,0 +1,25 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="bridge_hookshot"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_hookshot
+
+check_container_initialized
+#check_service_initialized 10-matrix_bridges
+setup_bridges
+
+if var_true "${ENABLE_FEEDS}" ; then hookshot_bridges+="feeds " ; fi
+if var_true "${ENABLE_FIGMA}" ; then hookshot_bridges+="figma " ; fi
+if var_true "${ENABLE_GITHUB}" ; then hookshot_bridges+="github " ; fi
+if var_true "${ENABLE_GITLAB}" ; then hookshot_bridges+="gitlab " ; fi
+if var_true "${ENABLE_JIRA}" ; then hookshot_bridges+="jira " ; fi
+if var_true "${ENABLE_WEBHOOKS}" ; then hookshot_bridges+="webhooks " ; fi
+liftoff
+
+print_start "Starting Hookshot ($(echo ${hookshot_bridges} | sed "s| $||g")) bridge version ${HOOKSHOT_VERSION}"
+cd /opt/hookshot
+sudo -u matrix exec node bin/matrix-hookshot/App/BridgeApp.js \
+                                                                /data/config.yml \
+                                                                /data/registration.yml
+

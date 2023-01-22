@@ -45,6 +45,8 @@ ARG GOOGLECHAT_VERSION
 ARG HOOKSHOT_VERSION
 ARG INSTAGRAM_VERSION
 ARG SIGNAL_VERSION
+ARG SIGNALD_VERSION
+ARG SIGNALDCTL_VERSION
 ARG SLACK_VERSION
 ARG TELEGRAM_VERSION
 ARG TWITTER_VERSION
@@ -56,6 +58,8 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"main"} \
     HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"2.5.0"} \
     INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"v0.2.3"} \
     SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.4.2"} \
+    SIGNALD_VERSION=${SIGNALD_VERSION:-"0.23.2"} \
+    SIGNALDCTL_VERSION=${SIGNALDCTL_VERSION:-"v0.6.1"} \
     SLACK_VERSION=${SLACK_VERSION:-"main"} \
     TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.12.2"} \
     TWITTER_VERSION=${TWITTER_VERSION:-"v0.1.5"} \
@@ -66,6 +70,8 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"main"} \
     HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
     INSTAGRAM_REPO_URL=https://github.com/mautrix/instagram \
     SIGNAL_REPO_URL=https://github.com/mautrix/signal \
+    SIGNALD_REPO_URL=https://gitlab.com/signald/signald \
+    SIGNALDCTL_REPO_URL=https://gitlab.com/signald/signald-go \
     SLACK_REPO_URL=https://github.com/mautrix/slack \
     TELEGRAM_REPO_URL=https://github.com/mautrix/telegram \
     TWITTER_REPO_URL=https://github.com/mautrix/twitter \
@@ -223,6 +229,10 @@ RUN source assets/functions/00-container && \
                     python3 \
                     && \
     \
+    package install .signald-run-deps \
+                    gradle \
+                    && \
+    \
     package install .slack-build-deps \
                     go \
                     olm-dev \
@@ -365,6 +375,18 @@ RUN source assets/functions/00-container && \
     mkdir -p /assets/config/signal && \
     cp -R mautrix_signal/example-config.yaml /assets/config/signal/example.config.yaml && \
     \
+    clone_git_repo "${SIGNALD_REPO_URL}" "${SIGNALD_VERSION}" && \
+    VERSION=$(./version.sh) gradle -Dorg.gradle.daemon=false runtime && \
+    mkdir -p /opt/signald \
+             /var/run/signald && \
+             \
+    cp -R build/image/* /opt/signald/ && \
+    chown -R matrix:matrix /opt/signald && \
+    clone_git_repo "${SIGNALDCTL_REPO_URL}" "${SIGNALDCTL_VERSION}" && \
+    make && \
+    strip signaldctl && \
+    cp signaldctl /usr/bin && \
+    \
     clone_git_repo "${SLACK_REPO_URL}" "${SLACK_VERSION}" && \
     go build -o /usr/bin/mautrix-slack && \
     mkdir -p /assets/config/slack && \
@@ -407,18 +429,23 @@ RUN source assets/functions/00-container && \
                     .googlechat-build-deps \
                     .instagram-build-deps \
                     .signal-build-deps\
+                    .signald-build-deps \
                     .slack-build-deps \
                     .telegram-build-deps \
                     .twitter-build-deps \
                     .whatsapp-build-deps \
                     && \
     package cleanup && \
-    rm -rf /root/.cache \
-           /root/.gitconfig \
-           /root/go \
-           /tmp/* \
-           /usr/example-config.yaml \
-           /usr/src/*
+    rm -rf \
+                /root/.cache \
+                /root/.cargo \
+                /root/.config \
+                /root/.gitconfig \
+                /root/.gradle \
+                /root/go \
+                /tmp/* \
+                /usr/example-config.yaml \
+                /usr/src/*
 
 COPY --from=hookshot_builder /usr/src/hookshot/lib /usr/src/hookshot/public /opt/hookshot/
 COPY install /

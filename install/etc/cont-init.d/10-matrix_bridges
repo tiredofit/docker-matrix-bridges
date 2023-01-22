@@ -6,7 +6,6 @@ set -a
 source /assets/defaults/matrix_bridges
 set +a
 
-
 PROCESS_NAME="matrix_bridges"
 
 bootstrap_filesystem
@@ -33,7 +32,7 @@ if [ ! -f "/tmp/.container/container-restart" ] ; then
         rm -rf /etc/services.available/bridge-googlechat
     fi
 
-    if var_true "${ENABLE_HOOKSHOT}" ; then
+    if var_true "${ENABLE_HOOKSHOT}" || var_true "${ENABLE_FEEDS}" || var_true "${ENABLE_FIGMA}" || var_true "${ENABLE_GITHUB}" || var_true "${ENABLE_GITLAB}" || var_true "${ENABLE_JIRA}" || var_true "${ENABLE_WEBHOOKS}" ; then
         configure_hookshot
     else
         rm -rf /etc/services.available/bridge-hookshot
