@@ -8,7 +8,7 @@ source /assets/defaults/bridge_whatsapp
 check_container_initialized
 #check_service_initialized 10-matrix_bridges
 liftoff
-
+cd ${LOG_PATH}
 print_start "Starting Whatsapp bridge version ${WHATSAPP_VERSION}"
 sudo -u matrix exec /usr/bin/mautrix-whatsapp \
                                                 -c "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"

@@ -48,6 +48,7 @@ if [ ! -f "/tmp/.container/container-restart" ] ; then
         configure_signal
     else
         rm -rf /etc/services.available/bridge-signal
+        rm -rf /etc/services.available/app-signald
     fi
 
     if var_true "${ENABLE_SLACK}" ; then

@@ -8,7 +8,7 @@ source /assets/defaults/bridge_facebook
 check_container_initialized
 #check_service_initialized 10-matrix_bridges-init
 liftoff
-
+cd "${LOG_PATH}"
 print_start "Starting Facebook bridge version ${FACEBOOK_VERSION}"
 cd /home/matrix
 sudo -u matrix exec python3 \

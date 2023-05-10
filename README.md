@@ -255,7 +255,7 @@ Facebook bridge provided by [Mautrix Facebook Bridge](https://github.com/mautrix
 | `FACEBOOK_HOMESERVER_SOFTWARE`                         |                       | `${HOMESERVER_SOFTWARE}`                     |
 | `FACEBOOK_HOMESERVER_STATUS_ENDPOINT`                  |                       | `null`                                       |
 | `FACEBOOK_HOMESERVER_TLS_VERIFY`                       |                       | `${HOMESERVER_TLS_VERIFY}`                   |
-| `FACEBOOK_INITIAL_CHAT_SYNC` | | `3` |
+| `FACEBOOK_INITIAL_CHAT_SYNC`                           |                       | `3`                                          |
 | `FACEBOOK_INVITE_OWN_PUPPET_TO_PM`                     |                       | `FALSE`                                      |
 | `FACEBOOK_LISTEN_IP`                                   |                       | `0.0.0.0`                                    |
 | `FACEBOOK_LISTEN_PORT`                                 |                       | `29319`                                      |
@@ -457,11 +457,11 @@ Signal bridge provided by [Mautrix Signal Bridge](https://github.com/mautrix/sig
 | ---------------------------------------------------- | ----------- | ---------------------------------------------- |
 | `SIGNAL_ALLOW_CONTACT_LIST_NAMES`                    |             | `TRUE`                                         |
 | `SIGNAL_APPSERVICE_ID`                               |             | `signal`                                       |
-| `SIGNAL_ATTACHMENT_PATH`                             |             | `${SIGNAL_DATA_PATH}/attachments`              |
-| `SIGNAL_AUTHDATA_PATH`                               |             | `${SIGNAL_DATA_PATH}/authdata`                 |
+| `SIGNALD_ATTACHMENT_PATH`                            |             | `${SIGNALD_DATA_PATH}/attachments`             |
+| `SIGNALD_AUTHDATA_PATH`                              |             | `${SIGNALD_DATA_PATH}/authdata`                |
 | `SIGNAL_AUTOCREATE_CONTACT_PORTAL`                   |             | `FALSE`                                        |
 | `SIGNAL_AUTOCREATE_GROUP_PORTAL`                     |             | `FALSE`                                        |
-| `SIGNAL_AVATAR_PATH`                                 |             | `${SIGNAL_DATA_PATH}/avatars`                  |
+| `SIGNALD_AVATAR_PATH`                                |             | `${SIGNALDS_DATA_PATH}/avatars`                |
 | `SIGNAL_BOT_AVATAR`                                  |             | `mxc://maunium.net/NeXNQarUbrlYBiPCpprYsRqr`   |
 | `SIGNAL_BOT_DISPLAYNAME`                             |             | `Signal bridge bot`                            |
 | `SIGNAL_BOT_USERNAME`                                |             | `signalbot`                                    |
@@ -470,16 +470,20 @@ Signal bridge provided by [Mautrix Signal Bridge](https://github.com/mautrix/sig
 | `SIGNAL_CONFIG_FILE`                                 |             | `signal.yaml`                                  |
 | `SIGNAL_CONFIG_PATH`                                 |             | `${CONFIG_PATH}`                               |
 | `SIGNAL_CONFIGURE_BRIDGE`                            |             | `TRUE`                                         |
-| `SIGNAL_DATA_PATH`                                   |             | `${DATA_PATH}/signal/`                         |
+| `SIGNAL_DB_MAX_SIZE`                                 |             | `10`                                           |
+| `SIGNAL_DB_MIN_SIZE`                                 |             | `1`                                            |
+| `SIGNALD_DATA_PATH`                                  |             | `${DATA_PATH}/signald/`                        |
 | `SIGNAL_DELETE_UNKNOWN_ACCOUNTS_ON_START`            |             | `FALSE`                                        |
 | `SIGNAL_DOUBLE_PUPPET_ALLOW_DISCOVERY`               |             | `FALSE`                                        |
 | `SIGNAL_ENABLE_DELIVERY_ERROR_REPORTS`               |             | `TRUE`                                         |
 | `SIGNAL_ENABLE_DELIVERY_RECEIPTS`                    |             | `FALSE`                                        |
 | `SIGNAL_ENABLE_DISAPPEARING_MESSAGES_IN_GROUPS`      |             | `TRUE`                                         |
+| `SIGNAL_ENABLE_EPHEMERAL_EVENTS`                     |             |                                               `TRUE` |
+| `SIGNAL_ENABLE_MANHOLE`                              |             | `FALSE`                                        |
 | `SIGNAL_ENABLE_MESSAGE_STATUS_EVENTS`                |             | `FALSE`                                        |
 | `SIGNAL_ENABLE_METRICS`                              |             | `FALSE`                                        |
-| `SIGNAL_ENCRYPTION_ALLOW`                            |             | `FALSE`                                        |
 | `SIGNAL_ENCRYPTION_ALLOW_KEY_SHARING`                |             | `FALSE`                                        |
+| `SIGNAL_ENCRYPTION_ALLOW`                            |             | `FALSE`                                        |
 | `SIGNAL_ENCRYPTION_APPSERVICE`                       |             | `FALSE`                                        |
 | `SIGNAL_ENCRYPTION_DEFAULT`                          |             | `FALSE`                                        |
 | `SIGNAL_ENCRYPTION_REQUIRE`                          |             | `FALSE`                                        |
@@ -489,7 +493,9 @@ Signal bridge provided by [Mautrix Signal Bridge](https://github.com/mautrix/sig
 | `SIGNAL_ENCRYPTION_VERIFY_LEVELS_RECEIVE`            |             | `unverified`                                   |
 | `SIGNAL_ENCRYPTION_VERIFY_LEVELS_SEND`               |             | `unverified`                                   |
 | `SIGNAL_ENCRYPTION_VERIFY_LEVELS_SHARE`              |             | `cross-signed-tofu`                            |
+| `SIGNAL_FEDERATE_ROOMS`                              |             | `TRUE`                                         |
 | `SIGNAL_HOMESERVER_ADDRESS`                          |             | `${HOMESERVER_ADDRESS}`                        |
+| `SIGNAL_HOMESERVER_CONNECTION_LIMIT`                 |             | `100`                                          |
 | `SIGNAL_HOMESERVER_DOMAIN`                           |             | `${HOMESERVER_DOMAIN}`                         |
 | `SIGNAL_HOMESERVER_ENABLE_ASYNC_UPLOADS`             |             | `${HOMESERVER_ENABLE_ASYNC_UPLOADS}`           |
 | `SIGNAL_HOMESERVER_HTTP_RETRY_COUNT`                 |             | `${HOMESERVER_HTTP_RETRY_COUNT}`               |
@@ -501,16 +507,22 @@ Signal bridge provided by [Mautrix Signal Bridge](https://github.com/mautrix/sig
 | `SIGNAL_LISTEN_PORT`                                 |             | `29328`                                        |
 | `SIGNAL_LOG_FILE`                                    |             | `signal.log`                                   |
 | `SIGNAL_LOG_LEVEL`                                   |             | `${LOG_LEVEL}`                                 |
+| `SIGNAL_LOG_LEVEL_AIOHTTP`                           |             | `${SIGNAL_LOG_LEVEL}`                          |
+| `SIGNAL_LOG_LEVEL_MAU`                               |             | `${SIGNAL_LOG_LEVEL}`                          |
 | `SIGNAL_LOG_PATH`                                    |             | `${LOG_PATH}`                                  |
 | `SIGNAL_LOG_TYPE`                                    |             | `${LOG_TYPE}`                                  |
 | `SIGNAL_MANAGEMENT_ROOM_MULTIPLE_MESSAGES`           |             | `TRUE`                                         |
 | `SIGNAL_MANAGEMENT_ROOM_TEXT_ADDITIONAL_HELP`        |             | ``                                             |
-| `SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME`                |             | `Hello, I'm a Signal bridge bot.`              |
 | `SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_CONNECTED`      |             | `Hello, I'm a Signal bridge bot.`              |
 | `SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_UNCONNECTED`    |             | `Use \`help\` for help or \`link\` to log in.` |
+| `SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME`                |             | `Hello, I'm a Signal bridge bot.`              |
+| `SIGNAL_MANHOLE_SOCKET`                              |             | `/var/tmp/manhole_bridge_signal.socket`        |
+| `SIGNAL_MANHOLE_WHITELIST`                           |             | `0`                                            |
+| `SIGNAL_MAX_BODY_SIZE`                               |             | `1`                                            |
 | `SIGNAL_METRICS_LISTEN_IP`                           |             | `127.0.0.1`                                    |
 | `SIGNAL_METRICS_LISTEN_PORT`                         |             | `7465`                                         |
 | `SIGNAL_PERIODIC_RECONNECT_INTERVAL`                 |             | `0`                                            |
+| `SIGNAL_PERIODIC_SYNC`                               |             | `0`                                            |
 | `SIGNAL_PERMISSIONS_ADMIN`                           |             | `@admin:example.com`                           |
 | `SIGNAL_PERMISSIONS_RELAY`                           |             | `*`                                            |
 | `SIGNAL_PERMISSIONS_USER`                            |             | `example.com`                                  |

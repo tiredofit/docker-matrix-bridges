@@ -1480,7 +1480,7 @@ configure_signal() {
         source /assets/defaults/bridge_signal
         set +a
         print_debug "[configure_signal]"
-        sanity_var SIGNAL_SOCKET "Socket file for SignalD"
+
         if [ ! -d "${SIGNAL_CONFIG_PATH}" ] ; then
             mkdir -p "${SIGNAL_CONFIG_PATH}"
         fi
@@ -1496,21 +1496,40 @@ configure_signal() {
         fi
         if [ $(stat -c %U "${SIGNAL_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_LOG_PATH}" ; fi
 
-
-        if [ ! -d "${SIGNAL_ATTACHMENT_PATH}" ] ; then
-            mkdir -p "${SIGNAL_ATTACHMENT_PATH}"
+        if [ ! -d "${SIGNALD_ATTACHMENT_PATH}" ] ; then
+            mkdir -p "${SIGNALD_ATTACHMENT_PATH}"
         fi
-        if [ $(stat -c %U "${SIGNAL_ATTACHMENT_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_ATTACHMENT_PATH}" ; fi
+        if [ $(stat -c %U "${SIGNALD_ATTACHMENT_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNALD_ATTACHMENT_PATH}" ; fi
 
-        if [ ! -d "${SIGNAL_AVATAR_PATH}" ] ; then
-            mkdir -p "${SIGNAL_AVATAR_PATH}"
+        if [ ! -d "${SIGNALD_AVATAR_PATH}" ] ; then
+            mkdir -p "${SIGNALD_AVATAR_PATH}"
         fi
-        if [ $(stat -c %U "${SIGNAL_AVATAR_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_AVATAR_PATH}" ; fi
+        if [ $(stat -c %U "${SIGNALD_AVATAR_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNALD_AVATAR_PATH}" ; fi
 
-        if [ ! -d "${SIGNAL_AUTHDATA_PATH}" ] ; then
-            mkdir -p "${SIGNAL_AUTHDATA_PATH}"
+        if [ ! -d "${SIGNALD_AUTHDATA_PATH}" ] ; then
+            mkdir -p "${SIGNALD_AUTHDATA_PATH}"
         fi
-        if [ $(stat -c %U "${SIGNAL_AUTHDATA_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNAL_AUTHDATA_PATH}" ; fi
+        if [ $(stat -c %U "${SIGNALD_AUTHDATA_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNALD_AUTHDATA_PATH}" ; fi
+
+        if var_true "${SIGNAL_ENABLE_SIGNALD}" ; then
+            if [ ! -d "${SIGNALD_CONFIG_PATH}" ] ; then
+                mkdir -p "${SIGNALD_CONFIG_PATH}"
+            fi
+            if [ $(stat -c %U "${SIGNALD_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNALD_CONFIG_PATH}" ; fi
+
+            if [ ! -d "${SIGNALD_DATA_PATH}" ] ; then
+                mkdir -p "${SIGNALD_DATA_PATH}"
+            fi
+            if [ $(stat -c %U "${SIGNALD_DATA_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNALD_DATA_PATH}" ; fi
+
+            if [ ! -d "${SIGNALD_LOG_PATH}" ] ; then
+                mkdir -p "${SIGNALD_LOG_PATH}"
+            fi
+            if [ $(stat -c %U "${SIGNALD_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${SIGNALD_LOG_PATH}" ; fi
+            export SIGNALD_SOCKET="/var/run/signald/signald.sock"
+        fi
+
+        sanity_var SIGNALD_SOCKET "Socket file for SignalD"
 
         case "${SIGNAL_DB_TYPE,,}" in
             postgres* )
@@ -1620,17 +1639,18 @@ configure_signal() {
         fi
 
         s6-setuidgid matrix yq -i   '
-                                        .signal.socket_path = env(SIGNAL_SOCKET) |
-                                        .signal.outgoing_attachment_dir = env(SIGNAL_ATTACHMENT_PATH) |
-                                        .signal.avatar_dir = env(SIGNAL_AVATAR_PATH) |
-                                        .signal.data_dir = env(SIGNAL_DATA_PATH) |
+                                        .signal.socket_path = env(SIGNALD_SOCKET) |
+                                        .signal.outgoing_attachment_dir = env(SIGNALD_ATTACHMENT_PATH) |
+                                        .signal.avatar_dir = env(SIGNALD_AVATAR_PATH) |
+                                        .signal.data_dir = env(SIGNALD_DATA_PATH) |
                                         .signal.delete_unknown_accounts_on_start = env(SIGNAL_DELETE_UNKNOWN_ACCOUNTS_ON_START) |
                                         .signal.remove_file_after_handling = env(SIGNAL_REMOVE_FILE_AFTER_HANDLING) |
                                         .signal.registration_enabled = env(SIGNAL_REGISTRATION_ENABLED) |
-                                        .signal.enable_disappearing_messages_in_groups = env(SIGNAL_ENABLE_DISAPPEARING_MESSAGES_IN_GROUPS) |
+                                        .signal.enable_disappearing_messages_in_groups = env(SIGNAL_ENABLE_DISAPPEARING_MESSAGES_IN_GROUPS)
                                     ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
 
         if var_true "${SIGNAL_CONFIGURE_BRIDGE}" ; then
+
             s6-setuidgid matrix yq -i   '
                                             .bridge.username_template = strenv(SIGNAL_TEMPLATE_USERNAME) |
                                             .bridge.displayname_template = strenv(SIGNAL_TEMPLATE_DISPLAYNAME) |
@@ -1659,8 +1679,9 @@ configure_signal() {
                                             .bridge.delivery_error_reports = env(SIGNAL_ENABLE_DELIVERY_ERROR_REPORTS) |
                                             .bridge.message_status_events = env(SIGNAL_ENABLE_MESSAGE_STATUS_EVENTS) |
                                             .bridge.resend_bridge_info = env(SIGNAL_RESEND_BRIDGE_INFO) |
+                                            .bridge.periodic_sync = env(SIGNAL_PERIODIC_SYNC) |
                                             .bridge.periodic_reconnect.interval = env(SIGNAL_PERIODIC_RECONNECT_INTERVAL) |
-                                            .bridge.bridge_matrix_leave= = env(SIGNAL_BRIDGE_MATRIX_LEAVE) |
+                                            .bridge.bridge_matrix_leave = env(SIGNAL_BRIDGE_MATRIX_LEAVE) |
                                             .bridge.provisioning.enabled = env(SIGNAL_PROVISIONING_ENABLE) |
                                             .bridge.provisioning.prefix = env(SIGNAL_PROVISIONING_PREFIX) |
                                             .bridge.provisioning.segment_key = env(SIGNAL_PROVISIONING_SEGMENT_KEY) |
@@ -1668,8 +1689,8 @@ configure_signal() {
                                             .bridge.management_room_text.welcome = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME) |
                                             .bridge.management_room_text.welcome_connected = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_CONNECTED) |
                                             .bridge.management_room_text.welcome_unconnected = env(SIGNAL_MANAGEMENT_ROOM_TEXT_WELCOME_UNCONNECTED) |
-                                            .bridge.management_room_text.additional_help = env(SIGNAL_MANAGEMENT_ROOM_TEXT_ADDITIONAL_HELP) |
-                                            .bridge.management_multiple_messages = env(SIGNAL_MANAGEMENT_ROOM_MULTIPLE_MESSAGES) |
+                                            .bridge.management_room_text.additional_help = "'$(echo ${SIGNAL_MANAGEMENT_ROOM_TEXT_ADDITIONAL_HELP})'" |
+                                            .bridge.management_multiple_messages = env(SIGNAL_MANAGEMENT_ROOM_MULTIPLE_MESSAGES)
                                         ' "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
         fi
 
@@ -1706,7 +1727,7 @@ configure_signal() {
 
         if [ -n "${SIGNAL_PERMISSIONS_USER}" ] ; then
             signalusers=$(echo "${SIGNAL_PERMISSIONS_USER}" | tr "," "\n")
-            for signaluser in $disusers; do
+            for signaluser in $signalusers; do
                 if [ "$signaluser" = "*" ] ; then
                     export SIGNALUSER="PLACEHOLDERASTERISK"
                 else
@@ -1768,6 +1789,46 @@ configure_signal() {
                                                         || exit $?
             print_notice "[configure_signal] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
         fi
+
+        if var_true "${SIGNAL_ENABLE_SIGNALD}" ; then
+            if [ "${SIGNALD_CONFIG_PATH}" != "/opt/signald/conf" ] && [ "${SIGNALD_CONFIG_FILE_LOG}" != "logging.properties" ] ; then
+                ln -sf "${SIGNALD_CONFIG_PATH}"/"${SIGNALD_CONFIG_FILE_LOGGING}" /opt/signald/conf/logging.properties
+            fi
+
+            case "${SIGNALD_LOG_TYPE,,}" in
+                "both" )
+                    create_logrotate app_signal "${SIGNALD_LOG_PATH}"/"${SIGNALD_LOG_FILE}" matrix matrix app_signal
+                    export SIGNALD_LOG_TYPE=" java.util.logging.FileHandler, java.util.logging.ConsoleHandler"
+                ;;
+                "console" )
+                    export SIGNALD_LOG_TYPE=" java.util.logging.ConsoleHandler"
+                ;;
+                "file" )
+                    create_logrotate app_signal "${SIGNALD_LOG_PATH}"/"${SIGNALD_LOG_FILE}" matrix matrix app_signal
+                    export SIGNALD_LOG_TYPE=" java.util.logging.FileHandler"
+                ;;
+            esac
+            cat <<EOF | silent sudo -u matrix tee "${SIGNALD_CONFIG_PATH}"/"${SIGNALD_CONFIG_FILE_LOGGING}"
+## Custom Generated SignalD logging Configuration! Do not edit, instead set ENV Vars
+## If you want to use your own configuration files set SETUP_TYPE=MANUAL when starting container
+## Last Generated on $(TZ=${TIMEZONE} date +'%Y-%m-%d %H:%M:%S %Z')
+
+handlers=${SIGNALD_LOG_TYPE}
+.level= ${SIGNALD_LOG_LEVEL}
+java.util.logging.SimpleFormatter.format=%1\$tc %4\$s: %5\$s %n
+
+java.util.logging.ConsoleHandler.level = ${SIGNALD_LOG_LEVEL_CONSOLE}
+java.util.logging.ConsoleHandler.formatter = java.util.logging.SimpleFormatter
+
+java.util.logging.FileHandler.pattern = ${SIGNALD_LOG_PATH}/${SIGNALD_LOG_FILE}
+java.util.logging.FileHandler.limit = 50000
+java.util.logging.FileHandler.count = 1
+java.util.logging.FileHandler.maxLocks = 100
+java.util.logging.FileHandler.formatter = java.util.logging.XMLFormatter
+
+EOF
+        fi
+    set +x
     fi
 }
 
@@ -2112,7 +2173,7 @@ configure_telegram() {
             s6-setuidgid matrix yq -i   '
                                             .appservice.as_token = env(TOI_TELEGRAM_AS_TOKEN)
                                         ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
-            fbastokenskip=true
+            telegramastokenskip=true
         elif [ -n "${TELEGRAM_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"; then
             print_notice "You've supplied 'TELEGRAM_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
         elif [ -n "${TELEGRAM_AS_TOKEN}" ] ; then
@@ -2128,7 +2189,7 @@ configure_telegram() {
             s6-setuidgid matrix yq -i   '
                                             .appservice.hs_token = env(TOI_TELEGRAM_HS_TOKEN)
                                         ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
-            fbhstokenskip=true
+            telegramhstokenskip=true
         elif [ -n "${TELEGRAM_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"; then
             print_notice "You've supplied 'TELEGRAM_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
         elif [ -n "${TELEGRAM_HS_TOKEN}" ] ; then
@@ -2159,11 +2220,11 @@ configure_telegram() {
                                     ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
 
         if var_true "${TELEGRAM_CONFIGURE_BRIDGE}" ; then
+            # .bridge.displayname_preference = [ "'$(echo ${TELEGRAM_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
             s6-setuidgid matrix yq -i   '
                                             .bridge.username_template = env(TELEGRAM_TEMPLATE_USERNAME) |
                                             .bridge.alias_template = env(TELEGRAM_TEMPLATE_ALIAS) |
                                             .bridge.displayname_template = env(TELEGRAM_TEMPLATE_DISPLAYNAME) |
-                                            .bridge.displayname_preference = [ "'$(echo ${TELEGRAM_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] | |
                                             .bridge.displayname_max_length = env(TELEGRAM_TEMPLATE_DISPLAYNAME_MAX_LENGTH) |
                                             .bridge.allow_avatar_remove = env(TELEGRAM_ALLOW_AVATAR_REMOVE) |
                                             .bridge.allow_contact_info = env(TELEGRAM_ALLOW_CONTACT_INFO) |
@@ -2269,7 +2330,7 @@ configure_telegram() {
                                             .bridge.ignore_unbridged_group_chat = env(TELEGRAM_IGNORE_UNBRIDGED_GROUP_CHAT) |
                                             .bridge.authless_portals = env(TELEGRAM_AUTHLESS_PORTALS) |
                                             .bridge.whitelist_group_admins = env(TELEGRAM_WHITELIST_GROUP_ADMINS) |
-                                            .bridge.ignore_own_incoming_events = env(TELEGRAM_IGNORE_OWN_INCOMING_EVENTS) |
+                                            .bridge.ignore_own_incoming_events = env(TELEGRAM_IGNORE_OWN_INCOMING_EVENTS)
                                         ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
         fi
 
@@ -2306,7 +2367,7 @@ configure_telegram() {
 
         if [ -n "${TELEGRAM_PERMISSIONS_USER}" ] ; then
             telegramusers=$(echo "${TELEGRAM_PERMISSIONS_USER}" | tr "," "\n")
-            for telegramuser in $disusers; do
+            for telegramuser in $telegramusers; do
                 if [ "$telegramuser" = "*" ] ; then
                     export TELEGRAMUSER="PLACEHOLDERASTERISK"
                 else
@@ -2321,7 +2382,7 @@ configure_telegram() {
         if grep -q "PLACEHOLDERASTERISK" "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}" ; then
             s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
         fi
-
+set -x
         s6-setuidgid matrix yq -i   '
                                         .telegram.api_id = env(TELEGRAM_API_ID) |
                                         .telegram.api_hash = env(TELEGRAM_API_HASH) |
@@ -2348,9 +2409,9 @@ configure_telegram() {
                                         .telegram.proxy.port = env(TELEGRAM_PROXY_PORT) |
                                         .telegram.proxy.rdns = env(TELEGRAM_PROXY_RDNS) |
                                         .telegram.proxy.username = env(TELEGRAM_PROXY_USER) |
-                                        .telegram.proxy.password = env(TELEGRAM_PROXY_PASS) |
+                                        .telegram.proxy.password = env(TELEGRAM_PROXY_PASS)
                                     ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
-
+set +x
         case "${TELEGRAM_LOG_TYPE,,}" in
             "both" )
                 create_logrotate bridge_telegram "${TELEGRAM_LOG_PATH}"/"${TELEGRAM_LOG_FILE}" matrix matrix bridge_telegram
@@ -2364,7 +2425,7 @@ configure_telegram() {
                 export TELEGRAM_LOG_TYPE="file"
             ;;
         esac
-
+        # .logging.root.handlers = [ "'$(echo "${TELEGRAM_LOG_TYPE,,//,/\",\"}")'" ]
         s6-setuidgid matrix yq -i   '
                                         .logging.version = 1 |
                                         .logging.handlers.file.class = "logging.FileHandler" |
@@ -2372,11 +2433,9 @@ configure_telegram() {
                                         del(.logging.handlers.file.backupCount) |
                                         del(.logging.handlers.file.maxBytes) |
                                         .logging.loggers.mau.level = env(TELEGRAM_LOG_LEVEL_MAU) |
-                                        .logging.loggers.maufbapi.level = env(TELEGRAM_LOG_LEVEL_MAUFBAPI) |
-                                        .logging.loggers.paho.level = env(TELEGRAM_LOG_LEVEL_PAHO) |
+                                        .logging.loggers.telethon.level = env(TELEGRAM_LOG_LEVEL_TELETHON) |
                                         .logging.loggers.aiohttp.level = env(TELEGRAM_LOG_LEVEL_AIOHTTP) |
-                                        .logging.root.level = env(TELEGRAM_LOG_LEVEL) |
-                                        .logging.root.handlers = [ "'$(echo "${TELEGRAM_LOG_TYPE,,//,/\",\"}")'" ]
+                                        .logging.root.level = env(TELEGRAM_LOG_LEVEL)
                                     ' "${TELEGRAM_CONFIG_PATH}"/"${TELEGRAM_CONFIG_FILE}"
 
         if [ ! -f "${TELEGRAM_REGISTRATION_PATH}"/"${TELEGRAM_REGISTRATION_FILE}" ] ; then
@@ -2890,7 +2949,7 @@ configure_whatsapp() {
                                         .logging.file_name_format = env(WHATSAPP_LOG_FILE) |
                                         .logging.print_level = env(WHATSAPP_LOG_LEVEL) |
                                         .logging.root.handlers = [ "'$(echo "${WHATSAPP_LOG_TYPE,,//,/\",\"}")'" ] |
-                                        .logging.file_mode = "0777" |
+                                        .logging.file_mode = "0o777" |
                                         .logging.timestamp_format = "2006-01-02 15:04:05"
                                     ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 

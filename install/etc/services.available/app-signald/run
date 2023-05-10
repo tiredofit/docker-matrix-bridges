@@ -1,0 +1,13 @@
+#!/command/with-contenv bash
+
+source /assets/functions/00-container
+PROCESS_NAME="app_signald"
+source /assets/defaults/matrix_bridges
+source /assets/defaults/bridge_signal
+
+check_container_initialized
+liftoff
+
+print_start "Starting Signald ${SIGNALD_VERSION}"
+sudo -u matrix exec /opt/signald/bin/java \
+                                            -classpath '/opt/signald/lib/*' io.finn.signald.Main -d "${SIGNALD_DATA_PATH}" ${SIGNALD_ARGS}
