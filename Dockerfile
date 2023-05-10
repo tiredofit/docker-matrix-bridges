@@ -1,11 +1,11 @@
-ARG ALPINE_VERSION=3.17
+ARG ALPINE_VERSION=3.18
 ARG DEBIAN_VERSION=bullseye
 
 FROM docker.io/tiredofit/debian:${DEBIAN_VERSION} as hookshot_builder
 LABEL maintainer="Dave Conroy (github.com/tiredofit)"
 
 ARG NODE_VERSION=18
-ENV HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"2.5.0"} \
+ENV HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"4.0.0"} \
     HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
     PATH="/root/.cargo/bin:${PATH}"
 
@@ -52,7 +52,7 @@ ARG TELEGRAM_VERSION
 ARG TWITTER_VERSION
 ARG WHATSAPP_VERSION
 
-ENV DISCORD_VERSION=${DISCORD_VERSION:-"main"} \
+ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.3.0"} \
     FACEBOOK_VERSION=${FACEBOOK_VERSION:-"v0.4.1"} \
     GOOGLECHAT_VERSION=${GOGGLECHAT_VERSION:-"v0.4.0"} \
     HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"2.5.0"} \
@@ -60,10 +60,10 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"main"} \
     SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.4.2"} \
     SIGNALD_VERSION=${SIGNALD_VERSION:-"0.23.2"} \
     SIGNALDCTL_VERSION=${SIGNALDCTL_VERSION:-"v0.6.1"} \
-    SLACK_VERSION=${SLACK_VERSION:-"main"} \
-    TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.12.2"} \
+    SLACK_VERSION=${SLACK_VERSION:-"415cf7035b58560c9f7096bfc2886691d14ea418"} \
+    TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.13.0"} \
     TWITTER_VERSION=${TWITTER_VERSION:-"v0.1.5"} \
-    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.8.1"} \
+    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.8.4"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
     FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     GOOGLECHAT_REPO_URL=https://github.com/mautrix/googlechat \
@@ -157,12 +157,6 @@ RUN source assets/functions/00-container && \
                     py3-pysocks \
                     py3-ruamel.yaml \
                     py3-unpaddedbase64 \
-                    && \
-    \
-    package install .hookshot-build-deps \
-                    cargo \
-                    nodejs \
-                    rust \
                     yarn \
                     && \
     \
@@ -231,6 +225,7 @@ RUN source assets/functions/00-container && \
     \
     package install .signald-run-deps \
                     gradle \
+                    gcompat \
                     && \
     \
     package install .slack-build-deps \
@@ -378,8 +373,10 @@ RUN source assets/functions/00-container && \
     clone_git_repo "${SIGNALD_REPO_URL}" "${SIGNALD_VERSION}" && \
     VERSION=$(./version.sh) gradle -Dorg.gradle.daemon=false runtime && \
     mkdir -p /opt/signald \
-             /var/run/signald && \
-             \
+             /var/run/signald \
+             && \
+    chown 0755 /var/run/signald && \
+    chown matrix:root /var/run/signald && \
     cp -R build/image/* /opt/signald/ && \
     chown -R matrix:matrix /opt/signald && \
     clone_git_repo "${SIGNALDCTL_REPO_URL}" "${SIGNALDCTL_VERSION}" && \
@@ -429,7 +426,6 @@ RUN source assets/functions/00-container && \
                     .googlechat-build-deps \
                     .instagram-build-deps \
                     .signal-build-deps\
-                    .signald-build-deps \
                     .slack-build-deps \
                     .telegram-build-deps \
                     .twitter-build-deps \
