@@ -61,9 +61,9 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.6.3"} \
     SIGNALD_VERSION=${SIGNALD_VERSION:-"0.23.2"} \
     SIGNALDCTL_VERSION=${SIGNALDCTL_VERSION:-"v0.6.1"} \
     SLACK_VERSION=${SLACK_VERSION:-"466ff2417b33d9caa23d0c9a4d7a692f33adf83b"} \
-    TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.14.2"} \
+    TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.15.0"} \
     TWITTER_VERSION=${TWITTER_VERSION:-"v0.1.7"} \
-    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.10.3"} \
+    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.10.4"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
     FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     GOOGLECHAT_REPO_URL=https://github.com/mautrix/googlechat \
@@ -390,13 +390,13 @@ RUN source assets/functions/00-container && \
     cp -R example-config.yaml /assets/config/slack/example.config.yaml && \
     \
     clone_git_repo "${TELEGRAM_REPO_URL}" "${TELEGRAM_VERSION}" && \
-    pip3 install \
-                --upgrade \
-                --no-cache-dir \
-                -r requirements.txt \
-                -r optional-requirements.txt \
-                .[all] \
-                && \
+    #pip3 install \
+    #            --upgrade \
+    #            --no-cache-dir \
+    #            -r requirements.txt \
+    #            -r optional-requirements.txt \
+    #            .[all] \
+    #            && \
     \
     mkdir -p /assets/config/telegram && \
     cp -R mautrix_telegram/example-config.yaml /assets/config/telegram/example.config.yaml && \
