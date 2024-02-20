@@ -161,7 +161,7 @@ configure_discord2() {
                                             .bridge.sync_direct_chat_list = env(DISCORD_SYNC_DIRECT_CHAT_LIST) |
                                             .bridge.resend_bridge_info = env(DISCORD_RESEND_BRIDGE_INFO) |
                                             .bridge.public_portals = env(DISCORD_PUBLIC_PORTALS) |
-                                            .bridge.caption_in_message = = env(DISCORD_CAPTION_IN_MESSAGE) |
+                                            .bridge.caption_in_message = env(DISCORD_CAPTION_IN_MESSAGE) |
                                             .bridge.federate_rooms = env(DISCORD_FEDERATE_ROOMS) |
                                             .bridge.double_puppet_allow_discovery = env(DISCORD_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
                                             .bridge.command_prefix = "'$(echo ${DISCORD_COMMAND_PREFIX})'" |
@@ -439,7 +439,7 @@ configure_discord() {
                                             .bridge.displayname_template = strenv(DISCORD_TEMPLATE_DISPLAYNAME) |
                                             .bridge.guild_name_template = env(DISCORD_TEMPLATE_GUILDNAME) |
                                             .bridge.channel_name_template = strenv(DISCORD_TEMPLATE_CHANNELNAME) |
-                                            .bridge.private_chat_portal_meta = env(DISCORD_PRIVATE_CHAAT_PORTAL_META) |
+                                            .bridge.private_chat_portal_meta = env(DISCORD_PRIVATE_CHAT_PORTAL_META) |
                                             .bridge.portal_message_buffer = env(DISCORD_PORTAL_MESSAGE_BUFFER) |
                                             .bridge.startup_private_channel_create_limit = env(DISCORD_STARTUP_PRIVATE_CHANNEL_CREATE_LIMIT) |
                                             .bridge.delivery_receipts = env(DISCORD_ENABLE_DELIVERY_RECEIPTS) |
@@ -1628,7 +1628,7 @@ configure_instagram() {
                                             .bridge.encryption.rotation.milliseconds = env(INSTAGRAM_ENCRYPTION_ROTATION_MILLISECONDS) |
                                             .bridge.encryption.rotation.messages = env(INSTAGRAM_ENCRYPTION_ROTATION_MESSAGES)
                                             .bridge.command_prefix = "'$(echo ${INSTAGRAM_COMMAND_PREFIX})'" |
-                                            .bridge.private_chat_portal_meta = env(INSTAGRAM_PRIVATE_CHAT_PORTA_META) |
+                                            .bridge.private_chat_portal_meta = env(INSTAGRAM_PRIVATE_CHAT_PORTAL_META) |
                                             .bridge.delivery_receipts = env(INSTAGRAM_ENABLE_DELIVERY_RECIPTS) |
                                             .bridge.delivery_error_reports = env(INSTAGRAM_ENABLE_DELIVERY_ERROR_REPORTS) |
                                             .bridge.message_status_events = env(INSTAGRAM_ENABLE_MESSAGE_STATUS_EVENTS) |
@@ -1891,7 +1891,7 @@ cofnigure_meta() {
                                             .bridge.sync_direct_chat_list = env(META_SYNC_DIRECT_CHAT_LIST) |
                                             .bridge.resend_bridge_info = env(META_RESEND_BRIDGE_INFO) |
                                             .bridge.public_portals = env(META_PUBLIC_PORTALS) |
-                                            .bridge.caption_in_message = = env(META_CAPTION_IN_MESSAGE) |
+                                            .bridge.caption_in_message = env(META_CAPTION_IN_MESSAGE) |
                                             .bridge.federate_rooms = env(META_FEDERATE_ROOMS) |
                                             .bridge.double_puppet_allow_discovery = env(META_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
                                             .bridge.command_prefix = "'$(echo ${META_COMMAND_PREFIX})'" |
@@ -2169,7 +2169,7 @@ configure_signal() {
                                             .bridge.sync_direct_chat_list = env(SIGNAL_SYNC_DIRECT_CHAT_LIST) |
                                             .bridge.resend_bridge_info = env(SIGNAL_RESEND_BRIDGE_INFO) |
                                             .bridge.public_portals = env(SIGNAL_PUBLIC_PORTALS) |
-                                            .bridge.caption_in_message = = env(SIGNAL_CAPTION_IN_MESSAGE) |
+                                            .bridge.caption_in_message = env(SIGNAL_CAPTION_IN_MESSAGE) |
                                             .bridge.federate_rooms = env(SIGNAL_FEDERATE_ROOMS) |
                                             .bridge.double_puppet_allow_discovery = env(SIGNAL_DOUBLE_PUPPET_ALLOW_DISCOVERY) |
                                             .bridge.command_prefix = "'$(echo ${SIGNAL_COMMAND_PREFIX})'" |
@@ -3145,79 +3145,79 @@ configure_whatsapp() {
             s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
         fi
 
-        #s6-setuidgid matrix yq -i 'del(.logging)' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-        #yq -i '.logging.min_level = env(WHATSAPP_LOG_LEVEL)' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-        #
-        #case "${WHATSAPP_LOG_TYPE,,}" in
-        #    "both" )
-        #        create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" bridge_ matrix matrixwhatsapp
-        #        yq -i '
-        #                .logging.writers = [
-        #                    {
-        #                        "type": "stdout",
-        #                        "format": "pretty-colored"
-        #                    },
-        #                    {
-        #                        "type": "file",
-        #                        "format": "json",
-        #                        "filename": "'$(echo "${WHATSAPP_LOG_PATH}/${WHATSAPP_LOG_FILE}")'",
-        #                        "max_size": 0,
-        #                        "local_time": true
-        #                    }
-        #                ]
-        #              ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-        #    ;;
-        #    "console" )
-        #        yq -i '
-        #                .logging.writers = [
-        #                    {
-        #                        "type": "stdout",
-        #                        "format": "pretty-colored"
-        #                    }
-        #                ]
-        #              ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-        #    ;;
-        #    "file" )
-        #        create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" bridge_ matrix matrixwhatsapp
-        #        yq -i '
-        #                .logging.writers = [
-        #                    {
-        #                        "type": "file",
-        #                        "format": "json",
-        #                        "filename": "'$(echo "${WHATSAPP_LOG_PATH}/${WHATSAPP_LOG_FILE}")'",
-        #                        "max_size": 0,
-        #                        "local_time": true
-        #                    }
-        #                ]
-        #              ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-        #    ;;
-        #esac
+        s6-setuidgid matrix yq -i 'del(.logging)' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+        yq -i '.logging.min_level = env(WHATSAPP_LOG_LEVEL)' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
 
         case "${WHATSAPP_LOG_TYPE,,}" in
             "both" )
                 create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" bridge_ matrix matrixwhatsapp
-                export WHATSAPP_LOG_TYPE="console,file"
+                yq -i '
+                        .logging.writers = [
+                            {
+                                "type": "stdout",
+                                "format": "pretty-colored"
+                            },
+                            {
+                                "type": "file",
+                                "format": "json",
+                                "filename": "'$(echo "${WHATSAPP_LOG_PATH}/${WHATSAPP_LOG_FILE}")'",
+                                "max_size": 0,
+                                "local_time": true
+                            }
+                        ]
+                      ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
             ;;
             "console" )
-                export WHATSAPP_LOG_TYPE="console"
-                export WHATSAPP_LOG_FILE="null"
+                yq -i '
+                        .logging.writers = [
+                            {
+                                "type": "stdout",
+                                "format": "pretty-colored"
+                            }
+                        ]
+                      ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
             ;;
             "file" )
                 create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" bridge_ matrix matrixwhatsapp
-                export WHATSAPP_LOG_TYPE="file"
+                yq -i '
+                        .logging.writers = [
+                            {
+                                "type": "file",
+                                "format": "json",
+                                "filename": "'$(echo "${WHATSAPP_LOG_PATH}/${WHATSAPP_LOG_FILE}")'",
+                                "max_size": 0,
+                                "local_time": true
+                            }
+                        ]
+                      ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
             ;;
         esac
 
-        s6-setuidgid matrix yq -i   '
-                                        .logging.directory = "'$(echo "${WHATSAPP_LOG_PATH}")'" |
-                                        .logging.file_name_format = env(WHATSAPP_LOG_FILE) |
-                                        .logging.print_level = env(WHATSAPP_LOG_LEVEL) |
-                                        .logging.root.handlers = [ "'$(echo "${WHATSAPP_LOG_TYPE,,//,/\",\"}")'" ] |
-                                        .logging.file_mode = "0o777" |
-                                        .logging.timestamp_format = "2006-01-02 15:04:05"
-                                    ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
-
-        create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" bridge_ matrix matrixwhatsapp
+        #case "${WHATSAPP_LOG_TYPE,,}" in
+        #    "both" )
+        #        create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" bridge_ matrix matrixwhatsapp
+        #        export WHATSAPP_LOG_TYPE="console,file"
+        #    ;;
+        #    "console" )
+        #        export WHATSAPP_LOG_TYPE="console"
+        #        export WHATSAPP_LOG_FILE="null"
+        #    ;;
+        #    "file" )
+        #        create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" bridge_ matrix matrixwhatsapp
+        #        export WHATSAPP_LOG_TYPE="file"
+        #    ;;
+        #esac
+#
+        #s6-setuidgid matrix yq -i   '
+        #                                .logging.directory = "'$(echo "${WHATSAPP_LOG_PATH}")'" |
+        #                                .logging.file_name_format = env(WHATSAPP_LOG_FILE) |
+        #                                .logging.print_level = env(WHATSAPP_LOG_LEVEL) |
+        #                                .logging.root.handlers = [ "'$(echo "${WHATSAPP_LOG_TYPE,,//,/\",\"}")'" ] |
+        #                                .logging.file_mode = "0o777" |
+        #                                .logging.timestamp_format = "2006-01-02 15:04:05"
+        #                            ' "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+#
+        #create_logrotate bridge_whatsapp "${WHATSAPP_LOG_PATH}"/"${WHATSAPP_LOG_FILE}" bridge_ matrix matrixwhatsapp
 
         if [ ! -f "${WHATSAPP_REGISTRATION_PATH}"/"${WHATSAPP_REGISTRATION_FILE}" ] ; then
             print_notice "[configure_whatsapp] Didn't find a registration file. Generating to '${WHATSAPP_REGISTRATION_PATH}/${WHATSAPP_REGISTRATION_FILE}'"

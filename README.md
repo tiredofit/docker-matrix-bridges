@@ -226,7 +226,7 @@ Facebook bridge provided by [Mautrix Facebook Bridge](https://github.com/mautrix
 | `FACEBOOK_DB_SQLITE_FILE`                              |                       | `facebook.db`                                |
 | `FACEBOOK_DB_SQLITE_PATH`                              |                       | `${DB_SQLITE_PATH}`                          |
 | `FACEBOOK_DB_TYPE`                                     | `POSTGRESQL` `SQLITE` | `SQLITE`                                     |
-| `FACEBOOK_DISABLE_BRIDGE_NOTICES                       |                       | `FALSE`                                      |
+| `FACEBOOK_DISABLE_BRIDGE_NOTICES`                      |                       | `FALSE`                                      |
 | `FACEBOOK_ENABLE_DELIVERY_ERROR_REPORTS`               |                       | `TRUE`                                       |
 | `FACEBOOK_ENABLE_DELIVERY_RECEIPTS`                    |                       | `FALSE`                                      |
 | `FACEBOOK_ENABLE_EPHEMERAL_EVENTS`                     |                       | `TRUE`                                       |
