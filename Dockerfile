@@ -1,80 +1,78 @@
-ARG ALPINE_VERSION=3.18
+ARG ALPINE_VERSION=3.19
 ARG DEBIAN_VERSION=bullseye
 
-FROM docker.io/tiredofit/debian:${DEBIAN_VERSION} as hookshot_builder
-LABEL maintainer="Dave Conroy (github.com/tiredofit)"
+#FROM docker.io/tiredofit/debian:${DEBIAN_VERSION} as hookshot_builder
+#LABEL maintainer="Dave Conroy (github.com/tiredofit)"
 
-ARG NODE_VERSION=18
-ENV HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"4.0.0"} \
-    HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
-    PATH="/root/.cargo/bin:${PATH}"
+#ARG NODE_VERSION=18
+#ENV HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"4.0.0"} \
+#    HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
+#    PATH="/root/.cargo/bin:${PATH}"
 
-RUN source /assets/functions/00-container && \
-    set -x && \
-    curl -sSL https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - && \
-    echo "deb https://deb.nodesource.com/node_${NODE_VERSION}.x $(cat /etc/os-release |grep "VERSION=" | awk 'NR>1{print $1}' RS='(' FS=')') main" > /etc/apt/sources.list.d/nodejs.list && \
-    curl -sSL https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
-    echo "deb https://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list && \
-    curl -sSL https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal && \
-    package update && \
-    package upgrade && \
-    package install \
-                    build-essential \
-                    cmake \
-                    git \
-                    nodejs \
-                    yarn \
-                    && \
-    clone_git_repo "${HOOKSHOT_REPO_URL}" "${HOOKSHOT_VERSION}" /usr/src/hookshot && \
-    yarn \
-        --ignore-scripts \
-        --pure-lockfile \
-        --network-timeout 600000 \
-        && \
-    node node_modules/esbuild/install.js && \
-    yarn build
+#RUN source /assets/functions/00-container && \
+#    set -x && \
+#    curl -sSL https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - && \
+#    echo "deb https://deb.nodesource.com/node_${NODE_VERSION}.x $(cat /etc/os-release |grep "VERSION=" | awk 'NR>1{print $1}' RS='(' FS=')') main" > /etc/apt/sources.list.d/nodejs.list && \
+#    curl -sSL https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
+#    echo "deb https://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list && \
+#    curl -sSL https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal && \
+#    package update && \
+#    package upgrade && \
+#    package install \
+#                    build-essential \
+#                    cmake \
+#                    git \
+#                    nodejs \
+#                    yarn \
+#                    && \
+#    clone_git_repo "${HOOKSHOT_REPO_URL}" "${HOOKSHOT_VERSION}" /usr/src/hookshot && \
+#    yarn \
+#        --ignore-scripts \
+#        --pure-lockfile \
+#        --network-timeout 600000 \
+#        && \
+#    node node_modules/esbuild/install.js && \
+#    yarn build
 
 FROM docker.io/tiredofit/alpine:${ALPINE_VERSION}
 LABEL maintainer="Dave Conroy (github.com/tiredofit)"
 
-COPY --from=hookshot_builder /usr/src/hookshot/yarn.lock /usr/src/hookshot/package.json  /opt/hookshot/
+#COPY --from=hookshot_builder /usr/src/hookshot/yarn.lock /usr/src/hookshot/package.json  /opt/hookshot/
 
-ARG DISCORD_VERSION
-ARG FACEBOOK_VERSION
-ARG GOOGLECHAT_VERSION
-ARG HOOKSHOT_VERSION
-ARG INSTAGRAM_VERSION
+#ARG DISCORD_VERSION
+#ARG FACEBOOK_VERSION
+#ARG GOOGLECHAT_VERSION
+#ARG HOOKSHOT_VERSION
+#ARG INSTAGRAM_VERSION
+ARG META_VERSION
 ARG SIGNAL_VERSION
-ARG SIGNALD_VERSION
-ARG SIGNALDCTL_VERSION
-ARG SLACK_VERSION
-ARG TELEGRAM_VERSION
-ARG TWITTER_VERSION
+#ARG SIGNALD_VERSION
+#ARG SIGNALDCTL_VERSION
+#ARG SLACK_VERSION
+#ARG TELEGRAM_VERSION
+#ARG TWITTER_VERSION
 ARG WHATSAPP_VERSION
 
-ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.6.3"} \
+#ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.6.3"} \
+    #GOOGLECHAT_VERSION=${GOGGLECHAT_VERSION:-"v0.5.0"} \
+    #HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"2.5.0"} \
+ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.6.5"} \
     FACEBOOK_VERSION=${FACEBOOK_VERSION:-"v0.5.1"} \
-    GOOGLECHAT_VERSION=${GOGGLECHAT_VERSION:-"v0.5.0"} \
-    HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"2.5.0"} \
-    INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"v0.3.1"} \
-    SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.4.2"} \
-    SIGNALD_VERSION=${SIGNALD_VERSION:-"0.23.2"} \
-    SIGNALDCTL_VERSION=${SIGNALDCTL_VERSION:-"v0.6.1"} \
-    SLACK_VERSION=${SLACK_VERSION:-"466ff2417b33d9caa23d0c9a4d7a692f33adf83b"} \
-    TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.15.0"} \
-    TWITTER_VERSION=${TWITTER_VERSION:-"v0.1.7"} \
-    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.10.4"} \
-    DISCORD_REPO_URL=https://github.com/mautrix/discord \
     FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
-    GOOGLECHAT_REPO_URL=https://github.com/mautrix/googlechat \
-    HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
-    INSTAGRAM_REPO_URL=https://github.com/mautrix/instagram \
+    IMESSAGE_VERSION=$IMESSAGE_VERSION:-"master"} \
+    META_VERSION=${META_VERSION:-"v0.1.0"} \
+    SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.5.0"} \
+    SLACK_VERSION=${SLACK_VERSION:-"a9ba2f9249bdc5df69a1349122d1769e7e48c9e1"} \
+    #TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.15.2"} \
+    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.10.5"} \
+    DISCORD_REPO_URL=https://github.com/mautrix/discord \
+    #GOOGLECHAT_REPO_URL=https://github.com/mautrix/googlechat \
+    #HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
+    IMESSAGE_REPO_URL=https://github.com/mautrix/imessage \
+    META_REPO_URL=https://github.com/mautrix/meta \
     SIGNAL_REPO_URL=https://github.com/mautrix/signal \
-    SIGNALD_REPO_URL=https://gitlab.com/signald/signald \
-    SIGNALDCTL_REPO_URL=https://gitlab.com/signald/signald-go \
     SLACK_REPO_URL=https://github.com/mautrix/slack \
-    TELEGRAM_REPO_URL=https://github.com/mautrix/telegram \
-    TWITTER_REPO_URL=https://github.com/mautrix/twitter \
+    #TELEGRAM_REPO_URL=https://github.com/mautrix/telegram \
     WHATSAPP_REPO_URL=https://github.com/mautrix/whatsapp \
     FFMPEG_BINARY=/usr/bin/ffmpeg \
     IMAGE_NAME="tiredofit/matrix-bridges" \
@@ -105,7 +103,12 @@ RUN source assets/functions/00-container && \
                     olm-dev \
                     && \
     \
-    package install .facebook-build-deps \
+    package install .discord-run-deps \
+                    olm \
+                    ffmpeg \
+                    && \
+    \
+        package install .facebook-build-deps \
                     libffi-dev  \
                     py3-pip \
                     py3-setuptools \
@@ -132,100 +135,72 @@ RUN source assets/functions/00-container && \
                     py3-unpaddedbase64 \
                     && \
     \
-    package install .googlechat-build-deps \
-                    libffi-dev  \
-                    py3-pip \
-                    py3-setuptools \
-                    py3-wheel \
-                    py3-pillow \
-                    python3-dev \
+    package install .imessage-build-deps \
+                    go \
+                    olm-dev \
                     && \
     \
-    package install .googlechat-run-deps \
-                    py3-aiohttp \
-                    py3-aiohttp-socks \
-                    py3-cffi \
-                    py3-commonmark \
-                    py3-future \
-                    py3-idna \
-                    py3-magic \
-                    py3-olm \
-                    py3-pillow \
-                    py3-prometheus-client \
-                    py3-protobuf \
-                    py3-pycryptodome \
-                    py3-pysocks \
-                    py3-ruamel.yaml \
-                    py3-unpaddedbase64 \
-                    yarn \
+    package install .imessage-run-deps \
+                    olm \
+                    ffmpeg \
+                    && \
+    #package install .hookshot-run-deps \
+    #                nodejs \
+    #                && \
+    #                \
+    #package install .instagram-build-deps \
+    #                libffi-dev  \
+    #                py3-pip \
+    #                py3-setuptools \
+    #                py3-wheel \
+    #                py3-pillow \
+    #                python3-dev \
+    #                && \
+    #\
+    #package install .instagram-run-deps \
+    #                py3-aiohttp \
+    #                py3-aiohttp-socks \
+    #                py3-cffi \
+    #                py3-commonmark \
+    #                py3-future \
+    #                py3-magic \
+    #                py3-olm \
+    #                py3-paho-mqtt \
+    #                py3-pillow \
+    #                py3-prometheus-client \
+    #                py3-pycryptodome \
+    #                py3-pysocks \
+    #                py3-ruaommentsmel.yaml \
+    #                py3-unpaddedbase64 \
+    #                && \
+    #\
+    package install .meta-build-deps \
+                    go \
+                    olm-dev \
                     && \
     \
-    package install .hookshot-run-deps \
-                    nodejs \
-                    && \
-                    \
-    package install .instagram-build-deps \
-                    libffi-dev  \
-                    py3-pip \
-                    py3-setuptools \
-                    py3-wheel \
-                    py3-pillow \
-                    python3-dev \
-                    && \
-    \
-    package install .instagram-run-deps \
-                    py3-aiohttp \
-                    py3-aiohttp-socks \
-                    py3-cffi \
-                    py3-commonmark \
-                    py3-future \
-                    py3-magic \
-                    py3-olm \
-                    py3-paho-mqtt \
-                    py3-pillow \
-                    py3-prometheus-client \
-                    py3-pycryptodome \
-                    py3-pysocks \
-                    py3-ruamel.yaml \
-                    py3-unpaddedbase64 \
+    package install .meta-run-deps \
+                    olm \
+                    ffmpeg \
                     && \
     \
     package install .signal-build-deps \
-                    libffi-dev  \
-                    py3-pip \
-                    py3-setuptools \
-                    py3-wheel \
-                    py3-pillow \
-                    python3-dev \
+                    cargo \
+                    clang-dev \
+                    cmake \
+                    g++ \
+                    git \
+                    go \
+                    make \
+                    musl-dev \
+                    olm-dev \
+                    protoc \
+                    rust \
                     && \
     \
     package install .signal-run-deps \
+                    olm \
                     ffmpeg \
-                    py3-aiohttp \
-                    py3-cffi \
-                    py3-commonmark \
-                    py3-cryptography \
-                    py3-future \
-                    py3-h11 \
-                    py3-idna \
-                    py3-magic \
-                    py3-olm \
-                    py3-phonenumbers \
-                    py3-pillow \
-                    py3-prometheus-client \
-                    py3-protobuf \
-                    py3-pycryptodome \
-                    py3-qrcode \
-                    py3-rfc3986 \
-                    py3-ruamel.yaml \
-                    py3-sniffio \
-                    py3-unpaddedbase64 \
-                    python3 \
-                    && \
-    \
-    package install .signald-run-deps \
-                    gradle \
-                    gcompat \
                     && \
     \
     package install .slack-build-deps \
@@ -233,68 +208,48 @@ RUN source assets/functions/00-container && \
                     olm-dev \
                     && \
     \
-    package install .telegram-build-deps \
-                    libffi-dev  \
-                    py3-pip \
-                    py3-setuptools \
-                    py3-setuptools-rust \
-                    py3-wheel \
-                    py3-pillow \
-                    python3-dev \
-                    && \
-    \
-    package install .telegram-run-deps \
-                    #imageio
-                    #py3-proglog \
-                    #py3-telethon \ (outdated)
+    package install .slack-run-deps \
+                    olm \
                     ffmpeg \
-                    py3-aiohttp \
-                    py3-brotli \
-                    py3-cffi \
-                    py3-commonmark \
-                    py3-decorator \
-                    py3-future \
-                    py3-idna \
-                    py3-magic \
-                    py3-mako \
-                    py3-numpy \
-                    py3-olm \
-                    py3-phonenumbers \
-                    py3-pillow \
-                    py3-pyaes \
-                    py3-pycryptodome \
-                    py3-pysocks \
-                    py3-qrcode \
-                    py3-requests \
-                    py3-rsa \
-                    py3-ruamel.yaml \
-                    py3-tqdm \
-                    py3-unpaddedbase64 \
                     && \
-    \
-    package install .twitter-build-deps \
-                    libffi-dev  \
-                    py3-pip \
-                    py3-setuptools \
-                    py3-wheel \
-                    py3-pillow \
-                    python3-dev \
-                    && \
-    \
-    package install .twitter-run-deps \
-                    py3-pillow \
-                    py3-aiohttp \
-                    py3-magic \
-                    py3-ruamel.yaml \
-                    py3-commonmark \
-                    py3-prometheus-client \
-                    py3-olm \
-                    py3-cffi \
-                    py3-pycryptodome \
-                    py3-unpaddedbase64 \
-                    py3-future \
-                    && \
-    \
+    #package install .telegram-build-deps \
+    #                libffi-dev  \
+    #                py3-pip \
+    #                py3-setuptools \
+    #                py3-setuptools-rust \
+    #                py3-wheel \
+    #                py3-pillow \
+    #                python3-dev \
+    #                && \
+    #\
+    #package install .telegram-run-deps \
+    #                #imageio
+    #                #py3-proglog \
+    #                #py3-telethon \ (outdated)
+    #                ffmpeg \
+    #                py3-aiohttp \
+    #                #py3-brotli \
+    #                py3-cffi \
+    #                py3-commonmark \
+    #                py3-decorator \
+    #                py3-future \
+    #                py3-idna \
+    #                py3-magic \
+    #                py3-mako \
+    #                py3-numpy \
+    #                py3-olm \
+    #                py3-phonenumbers \
+    #                py3-pillow \
+    #                py3-pyaes \
+    #                py3-pycryptodome \
+    #                py3-pysocks \
+    #                py3-qrcode \
+    #                py3-requests \
+    #                py3-rsa \
+    #                py3-ruamel.yaml \
+    #                py3-tqdm \
+    #                py3-unpaddedbase64 \
+    #                && \
     package install .whatsapp-build-deps \
                     go \
                     olm-dev \
@@ -306,7 +261,7 @@ RUN source assets/functions/00-container && \
                     && \
     \
     package install .run-deps \
-                    postgresql15-client \
+                    postgresql16-client \
                     sqlite \
                     && \
     \
@@ -317,6 +272,7 @@ RUN source assets/functions/00-container && \
     \
     clone_git_repo "${FACEBOOK_REPO_URL}" "${FACEBOOK_VERSION}" && \
     pip3 install \
+                --break-system-packages \
                 --upgrade \
                 --no-cache-dir \
                 -r requirements.txt \
@@ -324,94 +280,38 @@ RUN source assets/functions/00-container && \
                 .[all] \
                 && \
     \
+    pip3 install --break-system-packages --no-cache-dir .[e2be] && \
     mkdir -p /assets/config/facebook && \
     cp -R mautrix_facebook/example-config.yaml /assets/config/facebook/example.config.yaml && \
     \
-    clone_git_repo "${GOOGLECHAT_REPO_URL}" "${GOOGLECHAT_VERSION}" && \
-    pip3 install \
-                --upgrade \
-                --no-cache-dir \
-                -r requirements.txt \
-                -r optional-requirements.txt \
-                .[all] \
-                && \
+    clone_git_repo "${IMESSAGE_REPO_URL}" "${IMESSAGE_VERSION}" && \
+    mkdir -p /assets/config/imessage && \
+    go build -o /usr/bin/mautrix-imessage && \
+    cp -R example-config.yaml /assets/config/imessage/example.config.yaml && \
     \
-    mkdir -p /assets/config/googlechat && \
-    cp -R mautrix_googlechat/example-config.yaml /assets/config/googlechat/example.config.yaml && \
-    yarn \
-        --ignore-scripts \
-        --production \
-        --pure-lockfile \
-        --network-timeout 600000 \
-        && \
-    yarn cache clean && \
-
-    clone_git_repo "${INSTAGRAM_REPO_URL}" "${INSTAGRAM_VERSION}" && \
-    pip3 install \
-                --upgrade \
-                --no-cache-dir \
-                -r requirements.txt \
-                -r optional-requirements.txt \
-                .[all] \
-                && \
-    \
-    mkdir -p /assets/config/instagram && \
-    cp -R mautrix_instagram/example-config.yaml /assets/config/instagram/example.config.yaml && \
+    clone_git_repo "${META_REPO_URL}" "${META_VERSION}" && \
+    go build -o /usr/bin/mautrix-meta && \
+    mkdir -p /assets/config/meta && \
+    cp -R example-config.yaml /assets/config/meta/example.config.yaml && \
     \
     clone_git_repo "${SIGNAL_REPO_URL}" "${SIGNAL_VERSION}" && \
-    pip3 install \
-                --upgrade \
-                --no-cache-dir \
-                -r requirements.txt \
-                -r optional-requirements.txt \
-                .[all] \
-                && \
-    \
+    cd pkg/libsignalgo/libsignal && \
+    RUSTFLAGS="-Ctarget-feature=-crt-static" \
+    RUSTC_WRAPPER="" \
+    cargo build \
+        -p libsignal-ffi \
+        --profile=release \
+        && \
+    cd /usr/src/signal && \
+    LIBRARY_PATH=/usr/src/signal/pkg/libsignalgo/libsignal/target/release \
+    go build -o /usr/bin/mautrix-signal && \
     mkdir -p /assets/config/signal && \
-    cp -R mautrix_signal/example-config.yaml /assets/config/signal/example.config.yaml && \
-    \
-    clone_git_repo "${SIGNALD_REPO_URL}" "${SIGNALD_VERSION}" && \
-    VERSION=$(./version.sh) gradle -Dorg.gradle.daemon=false runtime && \
-    mkdir -p /opt/signald \
-             /var/run/signald \
-             && \
-    chown 0755 /var/run/signald && \
-    chown matrix:root /var/run/signald && \
-    cp -R build/image/* /opt/signald/ && \
-    chown -R matrix:matrix /opt/signald && \
-    clone_git_repo "${SIGNALDCTL_REPO_URL}" "${SIGNALDCTL_VERSION}" && \
-    make && \
-    strip signaldctl && \
-    cp signaldctl /usr/bin && \
+    cp -R example-config.yaml /assets/config/signal/example.config.yaml && \
     \
     clone_git_repo "${SLACK_REPO_URL}" "${SLACK_VERSION}" && \
     go build -o /usr/bin/mautrix-slack && \
     mkdir -p /assets/config/slack && \
     cp -R example-config.yaml /assets/config/slack/example.config.yaml && \
-    \
-    clone_git_repo "${TELEGRAM_REPO_URL}" "${TELEGRAM_VERSION}" && \
-    #pip3 install \
-    #            --upgrade \
-    #            --no-cache-dir \
-    #            -r requirements.txt \
-    #            -r optional-requirements.txt \
-    #            .[all] \
-    #            && \
-    \
-    mkdir -p /assets/config/telegram && \
-    cp -R mautrix_telegram/example-config.yaml /assets/config/telegram/example.config.yaml && \
-    \
-    clone_git_repo "${TWITTER_REPO_URL}" "${TWITTER_VERSION}" && \
-    pip3 install \
-                --upgrade \
-                --no-cache-dir \
-                -r requirements.txt \
-                -r optional-requirements.txt \
-                .[all] \
-                && \
-    \
-    mkdir -p /assets/config/twitter && \
-    cp -R mautrix_twitter/example-config.yaml /assets/config/twitter/example.config.yaml && \
     \
     clone_git_repo "${WHATSAPP_REPO_URL}" "${WHATSAPP_VERSION}" && \
     go build -o /usr/bin/mautrix-whatsapp && \
@@ -422,13 +322,11 @@ RUN source assets/functions/00-container && \
     package remove \
                     .build-deps \
                     .discord-build-deps \
-                    .facebook-build-deps \
-                    .googlechat-build-deps \
-                    .instagram-build-deps \
+                    .imesssage-build-deps \
+                    .meta-build-deps \
                     .signal-build-deps\
                     .slack-build-deps \
-                    .telegram-build-deps \
-                    .twitter-build-deps \
+                    #.telegram-build-deps \
                     .whatsapp-build-deps \
                     && \
     package cleanup && \
@@ -443,5 +341,5 @@ RUN source assets/functions/00-container && \
                 /usr/example-config.yaml \
                 /usr/src/*
 
-COPY --from=hookshot_builder /usr/src/hookshot/lib /usr/src/hookshot/public /opt/hookshot/
+#COPY --from=hookshot_builder /usr/src/hookshot/lib /usr/src/hookshot/public /opt/hookshot/
 COPY install /

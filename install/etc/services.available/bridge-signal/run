@@ -6,16 +6,8 @@ source /assets/defaults/matrix_bridges
 source /assets/defaults/bridge_signal
 
 check_container_initialized
-if var_true "${SIGNAL_ENABLE_SIGNALD}" ; then
-    check_service_initialized app-signald
-    wait_for_socket /var/run/signald/signald.sock
-else
-    wait_for_socket "${SIGNALD_SOCKET}"
-fi
-
 liftoff
-cd "${LOG_PATH}"
+
 print_start "Starting Signal bridge version ${SIGNAL_VERSION}"
-sudo -u matrix exec python3 \
-                            -m mautrix_signal \
-                            -c "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"
+sudo -u matrix /usr/bin/mautrix-signal \
+                                        -c "${SIGNAL_CONFIG_PATH}"/"${SIGNAL_CONFIG_FILE}"

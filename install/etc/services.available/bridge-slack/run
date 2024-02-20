@@ -11,4 +11,4 @@ liftoff
 
 print_start "Starting Slack bridge version ${SLACK_VERSION}"
 sudo -u matrix exec /usr/bin/mautrix-slack \
-                                            -c "${WHATSAPP_CONFIG_PATH}"/"${WHATSAPP_CONFIG_FILE}"
+                                            -c "${SLACK_CONFIG_PATH}"/"${SLACK_CONFIG_FILE}"
