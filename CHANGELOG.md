@@ -1,3 +1,9 @@
+## 0.0.5 2024-02-20 <dave at tiredofit dot ca>
+
+   ### Changed
+      - Cleanup image size
+
+
 ## 0.0.4 2024-02-20 <dave at tiredofit dot ca>
 
    ### Added

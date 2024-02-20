@@ -222,7 +222,7 @@ RUN source assets/functions/00-container && \
                     py3-tqdm \
                     py3-unpaddedbase64 \
                     && \
-
+    \
     package install .whatsapp-build-deps \
                     go \
                     olm-dev \
@@ -341,12 +341,11 @@ RUN source assets/functions/00-container && \
     cp -R example-config.yaml /assets/config/whatsapp/example.config.yaml && \
     \
     chown matrix:matrix /assets/config/ && \
-    package remove \
-                    .build-deps \
+    package remove  .build-deps \
                     .discord-build-deps \
                     .facebook-build-deps \
                     .hookshot-build-deps \
-                    .imesssage-build-deps \
+                    .imessage-build-deps \
                     .instagram-build-deps \
                     .meta-build-deps \
                     .signal-build-deps\
