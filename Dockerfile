@@ -15,7 +15,6 @@ ARG TELEGRAM_VERSION
 ARG WHATSAPP_VERSION
 
 ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.6.5"} \
-    FACEBOOK_VERSION=${FACEBOOK_VERSION:-"v0.5.1"} \
     HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"5.2.1"} \
     IMESSAGE_VERSION=${IMESSAGE_VERSION:-"master"} \
     INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"v0.3.1"} \
@@ -25,10 +24,8 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.6.5"} \
     TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.15.1"} \
     WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.10.5"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
-    FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
     IMESSAGE_REPO_URL=https://github.com/mautrix/imessage \
-    INSTAGRAM_REPO_URL=https://github.com/mautrix/instagram \
     META_REPO_URL=https://github.com/mautrix/meta \
     SIGNAL_REPO_URL=https://github.com/mautrix/signal \
     SLACK_REPO_URL=https://github.com/mautrix/slack \
@@ -68,33 +65,6 @@ RUN source assets/functions/00-container && \
                     ffmpeg \
                     && \
     \
-    package install .facebook-build-deps \
-                    libffi-dev  \
-                    py3-pip \
-                    py3-setuptools \
-                    py3-wheel \
-                    py3-pillow \
-                    python3-dev \
-                    && \
-    \
-    package install .facebook-run-deps \
-                    ffmpeg \
-                    py3-aiohttp \
-                    py3-aiohttp-socks \
-                    py3-cffi \
-                    py3-commonmark \
-                    py3-future \
-                    py3-magic \
-                    py3-olm \
-                    py3-paho-mqtt \
-                    py3-pillow \
-                    py3-prometheus-client \
-                    py3-pycryptodome \
-                    py3-pysocks \
-                    py3-ruamel.yaml \
-                    py3-unpaddedbase64 \
-                    && \
-    \
     package install .hookshot-build-deps \
                     build-base \
                     cargo \
@@ -117,32 +87,6 @@ RUN source assets/functions/00-container && \
     package install .imessage-run-deps \
                     olm \
                     ffmpeg \
-                    && \
-    \
-    package install .instagram-build-deps \
-                    libffi-dev  \
-                    py3-pip \
-                    py3-setuptools \
-                    py3-wheel \
-                    py3-pillow \
-                    python3-dev \
-                    && \
-    \
-    package install .instagram-run-deps \
-                    py3-aiohttp \
-                    py3-aiohttp-socks \
-                    py3-cffi \
-                    py3-commonmark \
-                    py3-future \
-                    py3-magic \
-                    py3-olm \
-                    py3-paho-mqtt \
-                    py3-pillow \
-                    py3-prometheus-client \
-                    py3-pycryptodome \
-                    py3-pysocks \
-                    py3-ruaommentsmel.yaml \
-                    py3-unpaddedbase64 \
                     && \
     \
     package install .meta-build-deps \
@@ -245,21 +189,6 @@ RUN source assets/functions/00-container && \
     cp -R example-config.yaml /assets/config/discord/example.config.yaml && \
     \
     cd /usr/src && \
-    clone_git_repo "${FACEBOOK_REPO_URL}" "${FACEBOOK_VERSION}" && \
-    pip3 install \
-                --break-system-packages \
-                --upgrade \
-                --no-cache-dir \
-                -r requirements.txt \
-                -r optional-requirements.txt \
-                .[all] \
-                && \
-    \
-    pip3 install --break-system-packages --no-cache-dir .[e2be] && \
-    mkdir -p /assets/config/facebook && \
-    cp -R mautrix_facebook/example-config.yaml /assets/config/facebook/example.config.yaml && \
-    \
-    cd /usr/src && \
     clone_git_repo "${HOOKSHOT_REPO_URL}" "${HOOKSHOT_VERSION}" /usr/src/hookshot && \
     yarn \
         --ignore-scripts \
@@ -281,24 +210,11 @@ RUN source assets/functions/00-container && \
     cp -R example-config.yaml /assets/config/imessage/example.config.yaml && \
     \
     cd /usr/src && \
-    clone_git_repo "${INSTAGRAM_REPO_URL}" "${INSTAGRAM_VERSION}" && \
-    pip3 install \
-                --break-system-packages \
-                --upgrade \
-                --no-cache-dir \
-                -r requirements.txt \
-                -r optional-requirements.txt \
-                .[all] \
-                && \
-    \
-    mkdir -p /assets/config/instagram && \
-    cp -R mautrix_instagram/example-config.yaml /assets/config/instagram/example.config.yaml && \
-    \
-    cd /usr/src && \
     clone_git_repo "${META_REPO_URL}" "${META_VERSION}" && \
     go build -o /usr/bin/mautrix-meta && \
-    mkdir -p /assets/config/meta && \
-    cp -R example-config.yaml /assets/config/meta/example.config.yaml && \
+    mkdir -p /assets/config/facebook /assets/config/instagram && \
+    cp -R example-config.yaml /assets/config/instagram/example.config.yaml && \
+    cp -R example-config.yaml /assets/config/facebook/example.config.yaml && \
     \
     cd /usr/src && \
     clone_git_repo "${SIGNAL_REPO_URL}" "${SIGNAL_VERSION}" && \
@@ -343,10 +259,8 @@ RUN source assets/functions/00-container && \
     chown matrix:matrix /assets/config/ && \
     package remove  .build-deps \
                     .discord-build-deps \
-                    .facebook-build-deps \
                     .hookshot-build-deps \
                     .imessage-build-deps \
-                    .instagram-build-deps \
                     .meta-build-deps \
                     .signal-build-deps\
                     .slack-build-deps \

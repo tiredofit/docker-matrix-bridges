@@ -9,8 +9,6 @@ check_container_initialized
 #check_service_initialized 10-matrix_bridges-init
 liftoff
 cd "${LOG_PATH}"
-print_start "Starting Facebook bridge version ${FACEBOOK_VERSION}"
-cd /home/matrix
-sudo -u matrix exec python3 \
-                                    -m mautrix_facebook \
+print_start "Starting Facebook bridge version ${META_VERSION}"
+sudo -u matrix /usr/bin/mautrix-meta \
                                     -c "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"

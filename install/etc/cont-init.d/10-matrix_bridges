@@ -44,12 +44,6 @@ if [ ! -f "/tmp/.container/container-restart" ] ; then
         rm -rf /etc/services.available/bridge-instagram
     fi
 
-    if var_true "${ENABLE_META}" ; then
-        configure_meta
-    else
-        rm -rf /etc/services.available/bridge-meta
-    fi
-
     if var_true "${ENABLE_SIGNAL}" ; then
         configure_signal
     else

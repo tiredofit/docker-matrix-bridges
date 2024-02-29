@@ -9,7 +9,6 @@ check_container_initialized
 #check_service_initialized 10-matrix_bridges
 liftoff
 
-print_start "Starting Instagram bridge version ${INSTAGRAM_VERSION}"
-sudo -u matrix exec python3 \
-                            -m mautrix_instagram \
+print_start "Starting Instagram bridge version ${META_VERSION}"
+sudo -u matrix /usr/bin/mautrix-meta \
                             -c "${INSTAGRAM_CONFIG_PATH}"/"${INSTRAGRAM_CONFIG_FILE}"
