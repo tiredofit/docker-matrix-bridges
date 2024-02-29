@@ -1,3 +1,9 @@
+## 0.0.6 2024-02-28 <dave at tiredofit dot ca>
+
+   ### Changed
+      - Migrate Facebook and Instagram to meta plugin. Best to delete old configuration and databases and start fresh
+
+
 ## 0.0.5 2024-02-20 <dave at tiredofit dot ca>
 
    ### Changed
