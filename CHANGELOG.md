@@ -1,3 +1,9 @@
+## 0.0.8 2024-03-03 <dave at tiredofit dot ca>
+
+   ### Changed
+      - Fix meta metrics variable
+
+
 ## 0.0.7 2024-03-03 <dave at tiredofit dot ca>
 
    ### Added
