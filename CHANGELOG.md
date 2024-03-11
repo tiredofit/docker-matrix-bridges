@@ -1,3 +1,9 @@
+## 0.0.9 2024-03-11 <dave at tiredofit dot ca>
+
+   ### Added
+      - Meta ad96a68372ac5bcd3f29d405e828022a0be143c7
+
+
 ## 0.0.8 2024-03-03 <dave at tiredofit dot ca>
 
    ### Changed
