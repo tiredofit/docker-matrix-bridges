@@ -681,11 +681,6 @@ configure_facebook() {
         fi
 
         s6-setuidgid matrix yq -i   '
-                                        .metrics.enabled = env(FACEBOOK_ENABLE_METRICS) |
-                                        .metrics.listen = env(FACEBOOK_METRICS_LISTEN_IP_PORT)
-                                    ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
-
-        s6-setuidgid matrix yq -i   '
                                         .meta.mode = "facebook" |
                                         .meta.ig_e2ee = false
                                     ' "${FACEBOOK_CONFIG_PATH}"/"${FACEBOOK_CONFIG_FILE}"
@@ -1576,11 +1571,6 @@ configure_instagram() {
                                             .appservice.hs_token = env(INSTAGRAM_HS_TOKEN)
                                         ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
         fi
-
-        s6-setuidgid matrix yq -i   '
-                                        .metrics.enabled = env(INSTAGRAM_ENABLE_METRICS) |
-                                        .metrics.listen = env(INSTAGRAM_METRICS_LISTEN_IP_PORT)
-                                    ' "${INSTAGRAM_CONFIG_PATH}"/"${INSTAGRAM_CONFIG_FILE}"
 
         s6-setuidgid matrix yq -i   '
                                         .meta.mode = "instagram" |

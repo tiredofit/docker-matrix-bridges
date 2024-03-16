@@ -1,3 +1,14 @@
+## 0.0.10 2024-03-16 <dave at tiredofit dot ca>
+
+   ### Added
+      - Mautrix-meta 0.2.0
+      - Matrux-Whatsapp 0.10.6
+      - Mautrix-Signal 0.5.1
+
+   ### Changed
+      - Remove Metrics from Instagram/Facebook configuration (meta plugin)
+
+
 ## 0.0.9 2024-03-11 <dave at tiredofit dot ca>
 
    ### Added
