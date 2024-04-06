@@ -1741,6 +1741,288 @@ configure_instagram() {
     fi
 }
 
+configure_oldfacebook() {
+    if [ "${SETUP_TYPE,,}" = "auto" ] ; then
+        set -a
+        source /assets/defaults/bridge_oldfacebook
+        set +a
+        print_debug "[configure_oldfacebook]"
+        if [ ! -d "${OLDFACEBOOK_CONFIG_PATH}" ] ; then
+            mkdir -p "${OLDFACEBOOK_CONFIG_PATH}"
+        fi
+        if [ $(stat -c %U "${OLDFACEBOOK_CONFIG_PATH}") != "matrix" ] ; then chown matrix:matrix "${OLDFACEBOOK_CONFIG_PATH}" ; fi
+
+        if [ ! -d "${OLDFACEBOOK_REGISTRATION_PATH}" ] ; then
+            mkdir -p "${OLDFACEBOOK_REGISTRATION_PATH}"
+        fi
+        if [ $(stat -c %U "${OLDFACEBOOK_REGISTRATION_PATH}") != "matrix" ] ; then chown matrix:matrix "${OLDFACEBOOK_REGISTRATION_PATH}" ; fi
+
+        if [ ! -d "${OLDFACEBOOK_LOG_PATH}" ] ; then
+            mkdir -p "${OLDFACEBOOK_LOG_PATH}"
+        fi
+        if [ $(stat -c %U "${OLDFACEBOOK_LOG_PATH}") != "matrix" ] ; then chown matrix:matrix "${OLDFACEBOOK_LOG_PATH}" ; fi
+
+        case "${OLDFACEBOOK_DB_TYPE,,}" in
+            postgres* )
+                sanity_var OLDFACEBOOK_DB_USER "DB Username for Facebook"
+                sanity_var OLDFACEBOOK_DB_PASS "DB Password for Facebook"
+                sanity_var OLDFACEBOOK_DB_HOST "DB Host for Facebook"
+                sanity_var OLDFACEBOOK_DB_NAME "DB Name for Facebook"
+                counter=0
+                export PGPASSWORD=${OLDFACEBOOK_DB_PASS}
+                until pg_isready --dbname="${OLDFACEBOOK_DB_NAME}" --host="${OLDFACEBOOK_DB_HOST}" --port="${OLDFACEBOOK_DB_PORT}" --username="${OLDFACEBOOK_DB_USER}" -q ; do
+                    sleep 5
+                    (( counter+=5 ))
+                    print_warn "Postgres Host '${OLDFACEBOOK_DB_HOST}' is not accessible, retrying.. ($counter seconds so far)"
+                done
+                export OLDFACEBOOK_DB_STRING=${OLDFACEBOOK_DB_STRING:-"postgres://${OLDFACEBOOK_DB_USER}:${OLDFACEBOOK_DB_PASS}@${OLDFACEBOOK_DB_HOST}:${OLDFACEBOOK_DB_PORT}/${OLDFACEBOOK_DB_NAME}"}
+            set +x
+            ;;
+            sqlite* )
+                if [ ! -d "${OLDFACEBOOK_DB_SQLITE_PATH}" ] ; then
+                    mkdir -p "${OLDFACEBOOK_DB_SQLITE_PATH}"
+                fi
+                if [ $(stat -c %U "${OLDFACEBOOK_DB_SQLITE_PATH}") != "matrix" ] ; then chown matrix:matrix "${OLDFACEBOOK_DB_SQLITE_PATH}" ; fi
+
+                export OLDFACEBOOK_DB_STRING=${OLDFACEBOOK_DB_STRING:-"sqlite://${OLDFACEBOOK_DB_SQLITE_PATH}/${OLDFACEBOOK_DB_SQLITE_FILE}"}
+            ;;
+        esac
+
+        if [ ! -f "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}" ]; then
+            s6-setuidgid matrix cp -R /assets/config/facebook/example.config.yaml "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .homeserver.address = env(OLDFACEBOOK_HOMESERVER_ADDRESS) |
+                                        .homeserver.domain = env(OLDFACEBOOK_HOMESERVER_DOMAIN) |
+                                        .homeserver.verify_ssl = env(OLDFACEBOOK_HOMESERVER_TLS_VERIFY) |
+                                        .homeserver.software = env(OLDFACEBOOK_HOMESERVER_SOFTWARE) |
+                                        .homeserver.http_retry_count = env(OLDFACEBOOK_HOMESERVER_HTTP_RETRY_COUNT) |
+                                        .homeserver.status_endpoint = env(OLDFACEBOOK_HOMESERVER_STATUS_ENDPOINT) |
+                                        .homeserver.message_send_checkpoint_endpoint = env(OLDFACEBOOK_HOMESERVER_MESSAGE_SEND_CHECKPOINT_ENDPOINT) |
+                                        .homeserver.async_media = env(OLDFACEBOOK_HOMESERVER_ENABLE_ASYNC_UPLOADS)
+                                    ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .appservice.address = env(OLDFACEBOOK_APPSERVER_ADDRESS) |
+                                        .appservice.hostname = env(OLDFACEBOOK_LISTEN_IP) |
+                                        .appservice.port = env(OLDFACEBOOK_LISTEN_PORT) |
+                                        .appservice.max_body_size = env(OLDFACEBOOK_MAX_BODY_SIZE) |
+                                        .appservice.database = env(OLDFACEBOOK_DB_STRING) |
+                                        .appservice.database_opts.min_size = env(OLDFACEBOOK_DB_MIN_SIZE) |
+                                        .appservice.database_opts.max_size = env(OLDFACEBOOK_DB_MAX_SIZE) |
+                                        .appservice.id = env(OLDFACEBOOK_APPSERVICE_ID) |
+                                        .appservice.bot_username = env(OLDFACEBOOK_BOT_USERNAME) |
+                                        .appservice.bot_displayname = env(OLDFACEBOOK_BOT_DISPLAYNAME) |
+                                        .appservice.bot_avatar = env(OLDFACEBOOK_BOT_AVATAR) |
+                                        .appservice.ephemeral_events = env(OLDFACEBOOK_ENABLE_EPHEMERAL_EVENTS)
+                                    ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+
+
+        if [ -f "${OLDFACEBOOK_REGISTRATION_PATH}"/"${OLDFACEBOOK_REGISTRATION_FILE}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}" && [ -z "${OLDFACEBOOK_AS_TOKEN}" ] ; then
+            print_debug "[configure_oldfacebook] Setting as_token in configuration from previously generated registration file"
+            export TOI_OLDFACEBOOK_AS_TOKEN=$(yq '.as_token' "${OLDFACEBOOK_REGISTRATION_PATH}"/"${OLDFACEBOOK_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(TOI_OLDFACEBOOK_AS_TOKEN)
+                                        ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+            fbastokenskip=true
+        elif [ -n "${OLDFACEBOOK_AS_TOKEN}" ] && grep -q 'as_token: "This value is generated when generating the registration"' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"; then
+            print_notice "You've supplied 'OLDFACEBOOK_AS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${OLDFACEBOOK_AS_TOKEN}" ] ; then
+            print_debug "[configure_oldfacebook] Updating OLDFACEBOOK_AS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.as_token = env(OLDFACEBOOK_AS_TOKEN)
+                                        ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+        fi
+
+        if [ -f "${OLDFACEBOOK_REGISTRATION_PATH}"/"${OLDFACEBOOK_REGISTRATION_FILE}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}" && [ -z "${OLDFACEBOOK_HS_TOKEN}" ] ; then
+            print_debug "[configure_oldfacebook] Setting hs_token in configuration from previously generated registration file"
+            export TOI_OLDFACEBOOK_HS_TOKEN=$(yq '.hs_token' "${OLDFACEBOOK_REGISTRATION_PATH}"/"${OLDFACEBOOK_REGISTRATION_FILE}")
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(TOI_OLDFACEBOOK_HS_TOKEN)
+                                        ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+            fbhstokenskip=true
+        elif [ -n "${OLDFACEBOOK_HS_TOKEN}" ] && grep -q 'hs_token: "This value is generated when generating the registration"' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"; then
+            print_notice "You've supplied 'OLDFACEBOOK_HS_TOKEN' - It needs to be autogenerated, ignoring for this run. Please update with autogenerated value "
+        elif [ -n "${OLDFACEBOOK_HS_TOKEN}" ] ; then
+            print_debug "[configure_oldfacebook] Updating OLDFACEBOOK_HS_TOKEN"
+            s6-setuidgid matrix yq -i   '
+                                            .appservice.hs_token = env(OLDFACEBOOK_HS_TOKEN)
+                                        ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i   '
+                                        .appservice.public.enabled = env(OLDFACEBOOK_ENABLE_PUBLIC) |
+                                        .appservice.public.prefix = env(OLDFACEBOOK_PUBLIC_PREFIX) |
+                                        .appservice.public.external = env(OLDFACEBOOK_PUBLIC_EXTERNAL_URL) |
+                                        .appservice.public.shared_secret = env(OLDFACEBOOK_PUBLIC_SHARED_SECRET) |
+                                        .appservice.public.allow_matrix_login = env(OLDFACEBOOK_ALLOW_MATRIX_LOGIN) |
+                                        .appservice.public.segment_key = env(OLDFACEBOOK_SEGMENT_API_KEY)
+                                    ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .metrics.enabled = env(OLDFACEBOOK_ENABLE_METRICS) |
+                                        .metrics.listen_port = env(OLDFACEBOOK_METRICS_LISTEN_PORT)
+                                    ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+
+        s6-setuidgid matrix yq -i   '
+                                        .manhole.enabled = env(OLDFACEBOOK_ENABLE_MANHOLE) |
+                                        .manhole.path = env(OLDFACEBOOK_MANHOLE_SOCKET) |
+                                        .manhole.whitelist = [ "'$(echo ${OLDFACEBOOK_MANHOLE_WHITELIST//,/\",\"})'" ]
+                                    ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+
+        if var_true "${OLDFACEBOOK_CONFIGURE_BRIDGE}" ; then
+            s6-setuidgid matrix yq -i   '
+                                            .bridge.username_template = strenv(OLDFACEBOOK_TEMPLATE_USERNAME) |
+                                            .bridge.displayname_template = strenv(OLDFACEBOOK_TEMPLATE_DISPLAYNAME) |
+                                            .bridge.displayname_preference = [ "'$(echo ${OLDFACEBOOK_TEMPLATE_DISPLAYNAME_PREFERENCE//,/\",\"})'" ] |
+                                            .bridge.command_prefix = "'$(echo ${OLDFACEBOOK_COMMAND_PREFIX})'" |
+                                            .bridge.inital_chat_sync = env(OLDFACEBOOK_INITIAL_CHAT_SYNC) |
+                                            .bridge.invite_own_puppet_to_pm = env(OLDFACEBOOK_INVITE_OWN_PUPPET_TO_PM) |
+                                            .bridge.sync_direct_chat_list = env(OLDFACEBOOK_SYNC_DIRECT_CHAT_LIST) |
+                                            .bridge.presence_from_facebook = env(OLDFACEBOOK_BRIDGE_PRESENCE) |
+                                            .bridge.update_avatar_initial_sync = env(OLDFACEBOOK_SYNC_UPDATE_AVATAR) |
+                                            .bridge.delivery_receipts = env(OLDFACEBOOK_ENABLE_DELIVERY_RECEIPTS) |
+                                            .bridge.delivery_error_reports = env(OLDFACEBOOK_ENABLE_DELIVERY_ERROR_REPORTS) |
+                                            .bridge.message_status_events = env(OLDFACEBOOK_ENABLE_MESSAGE_STATUS_EVENTS) |
+                                            .bridge.allow_invites = env(OLDFACEBOOK_ALLOW_INVITES) |
+                                            .bridge.federate_rooms = env(OLDFACEBOOK_FEDERATE_ROOMS) |
+                                            .bridge.backfill.enable = env(OLDFACEBOOK_BACKFILL_ENABLE) |
+                                            .bridge.backfill.msc2716 = env(OLDFACEBOOK_BACKFILL_ENABLE_MSC2716) |
+                                            .bridge.backfill.max_conversations = env(OLDFACEBOOK_BACKFILL_MAX_CONVERSATIONS) |
+                                            .bridge.backfill.min_sync_thread_delay = env(OLDFACEBOOK_BACKFILL_SYNC_THREAD_DELAY) |
+                                            .bridge.backfill.unread_hours_threshold = env(OLDFACEBOOK_BACKFILL_UNREAD_HOURS_THRESHOLD) |
+                                            .bridge.periodic_reconnect.interval = env(OLDFACEBOOK_PERIODIC_RECONNECT_INTERVAL) |
+                                            .bridge.periodic_reconnect.refresh = env(OLDFACEBOOK_PERIODIC_RECONNECT_MODE) |
+                                            .bridge.periodic_reconnect.always = env(OLDFACEBOOK_PERIODIC_RECONNECT_ALWAYS) |
+                                            .bridge.periodic_reconnect.min_connected_time = env(OLDFACEBOOK_PERIODIC_RECONNECT_MIN_CONNECTED_TIME) |
+                                            .bridge.resync_max_disconnected_time = env(OLDFACEBOOK_RESYNC_MAX_DISCONNECTED_TIME) |
+                                            .bridge.sync_on_startup = env(OLDFACEBOOK_SYNC_ON_STARTUP) |
+                                            .bridge.temporary_disconnect_notices = env(OLDFACEBOOK_TEMPORARY_DISCONNECT_NOTICES) |
+                                            .bridge.on_reconnection_fail.action = env(OLDFACEBOOK_RECONNECTION_FAIL_ACTION) |
+                                            .bridge.on_reconnection_fail.wait_for = env(OLDFACEBOOK_RECONNECTION_FAIL_WAIT) |
+                                            .bridge.disable_bridge_notices = env(OLDFACEBOOK_DISABLE_BRIDGE_NOTICES) |
+                                            .bridge.resend_bridge_info = env(OLDFACEBOOK_RESEND_BRIDGE_INFO) |
+                                            .bridge.mute_bridging = env(OLDFACEBOOK_MUTE_BRIDGING) |
+                                            .bridge.tag_only_on_create = env(OLDFACEBOOK_TAG_ONLY_ON_CREATE) |
+                                            .bridge.sandbox_media_download = env(OLDFACEBOOK_SANDBOX_MEDIA_DOWNLOAD) |
+                                            .bridge.get_proxy_api_url = env(OLDFACEBOOK_GET_PROXY_API_URL) |
+                                            .bridge.encryption.allow = env(OLDFACEBOOK_ENCRYPTION_ALLOW) |
+                                            .bridge.encryption.default = env(OLDFACEBOOK_ENCRYPTION_DEFAULT) |
+                                            .bridge.encryption.appservice = env(OLDFACEBOOK_ENCRYPTION_APPSERVICE) |
+                                            .bridge.encryption.require = env(OLDFACEBOOK_ENCRYPTION_REQUIRE) |
+                                            .bridge.encryption.allow_key_sharing = env(OLDFACEBOOK_ENCRYPTION_ALLOW_KEY_SHARING) |
+                                            .bridge.encryption.verification_levels.receive = env(OLDFACEBOOK_ENCRYPTION_VERIFY_LEVELS_RECEIVE) |
+                                            .bridge.encryption.verification_levels.send = env(OLDFACEBOOK_ENCRYPTION_VERIFY_LEVELS_SEND) |
+                                            .bridge.encryption.verification_levels.share = env(OLDFACEBOOK_ENCRYPTION_VERIFY_LEVELS_SHARE) |
+                                            .bridge.encryption.rotation.enable_custom = env(OLDFACEBOOK_ENCRYPTION_ROTATION_ENABLE_CUSTOM) |
+                                            .bridge.encryption.rotation.milliseconds = env(OLDFACEBOOK_ENCRYPTION_ROTATION_MILLISECONDS) |
+                                            .bridge.encryption.rotation.messages = env(OLDFACEBOOK_ENCRYPTION_ROTATION_MESSAGES)
+                                        ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+        fi
+
+        s6-setuidgid matrix yq -i 'del(.bridge.permissions)' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+        set -f
+
+        if [ -n "${OLDFACEBOOK_PERMISSIONS_RELAY}" ] ; then
+            fbrelays=$(echo "${OLDFACEBOOK_PERMISSIONS_RELAY}" | tr "," "\n")
+            for fbrelay in $fbrelays; do
+                if [ "$fbrelay" = "*" ] ; then
+                    export FBRELAY="PLACEHOLDERASTERISK"
+                else
+                    export FBRELAY=$fbrelay
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[  "'$(echo ${FBRELAY})'" ]+= "relay"
+                                            ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${OLDFACEBOOK_PERMISSIONS_ADMIN}" ] ; then
+            fbadmins=$(echo "${OLDFACEBOOK_PERMISSIONS_ADMIN}" | tr "," "\n")
+            for fbadmin in $fbadmins; do
+                if [ "$fbadmin" = "*" ] ; then
+                    export FBADMIN="PLACEHOLDERASTERISK"
+                else
+                    export FBADMIN=$fbadmin
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[ "'$(echo ${FBADMIN})'" ] += "admin"
+                                            ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+            done
+        fi
+
+        if [ -n "${OLDFACEBOOK_PERMISSIONS_USER}" ] ; then
+            fbusers=$(echo "${OLDFACEBOOK_PERMISSIONS_USER}" | tr "," "\n")
+            for fbuser in $fbusers; do
+                if [ "$fbuser" = "*" ] ; then
+                    export FBUSER="PLACEHOLDERASTERISK"
+                else
+                    export FBUSER=$fbuser
+                fi
+                s6-setuidgid matrix yq -i   '
+                                                .bridge.permissions.[env(FBUSER)] += "user"
+                                            ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+            done
+        fi
+        set +f
+        if grep -q "PLACEHOLDERASTERISK" "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}" ; then
+            s6-setuidgid matrix sed -i "s|PLACEHOLDERASTERISK|\"*\"|g" "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+        fi
+
+        case "${OLDFACEBOOK_LOG_TYPE,,}" in
+            "both" )
+                create_logrotate bridge_facebook "${OLDFACEBOOK_LOG_PATH}"/"${OLDFACEBOOK_LOG_FILE}" bridge_ matrix matrixfacebook
+                export OLDFACEBOOK_LOG_TYPE="console,file"
+            ;;
+            "console" )
+                export OLDFACEBOOK_LOG_TYPE="console"
+            ;;
+            "file" )
+                create_logrotate bridge_facebook "${OLDFACEBOOK_LOG_PATH}"/"${OLDFACEBOOK_LOG_FILE}" bridge_ matrix matrixfacebook
+                export OLDFACEBOOK_LOG_TYPE="file"
+            ;;
+        esac
+
+        s6-setuidgid matrix yq -i   '
+                                        .logging.version = 1 |
+                                        .logging.handlers.file.class = "logging.FileHandler" |
+                                        .logging.handlers.file.filename = "'$(echo "${OLDFACEBOOK_LOG_PATH}/${OLDFACEBOOK_LOG_FILE}")'" |
+                                        del(.logging.handlers.file.backupCount) |
+                                        del(.logging.handlers.file.maxBytes) |
+                                        .logging.loggers.mau.level = env(OLDFACEBOOK_LOG_LEVEL_MAU) |
+                                        .logging.loggers.maufbapi.level = env(OLDFACEBOOK_LOG_LEVEL_MAUFBAPI) |
+                                        .logging.loggers.paho.level = env(OLDFACEBOOK_LOG_LEVEL_PAHO) |
+                                        .logging.loggers.aiohttp.level = env(OLDFACEBOOK_LOG_LEVEL_AIOHTTP) |
+                                        .logging.root.level = env(OLDFACEBOOK_LOG_LEVEL) |
+                                        .logging.root.handlers = [ "'$(echo "${OLDFACEBOOK_LOG_TYPE,,//,/\",\"}")'" ]
+                                    ' "${OLDFACEBOOK_CONFIG_PATH}"/"${OLDFACEBOOK_CONFIG_FILE}"
+
+        create_logrotate bridge_facebook "${OLDFACEBOOK_LOG_PATH}"/"${OLDFACEBOOK_LOG_FILE}" bridge_ matrix matrixfacebook
+
+        if [ ! -f "${OLDFACEBOOK_REGISTRATION_PATH}"/"${OLDFACEBOOK_REGISTRATION_FILE}" ] ; then
+            print_notice "[configure_oldfacebook] Didn't find a registration file. Generating to '${OLDFACEBOOK_REGISTRATION_PATH}/${OLDFACEBOOK_REGISTRATION_FILE}'"
+            fb_generate_registration=true
+        elif var_true "${OLDFACEBOOK_REGENERATE_REGISTRATION}" ; then
+            print_notice "[configure_oldfacebook] Regenerating registration file to '${OLDFACEBOOK_REGISTRATION_PATH}/${OLDFACEBOOK_REGISTRATION_FILE}'"
+            fb_generate_registration=true
+        elif var_true "${fb_force_registration}" ; then
+            print_notice "[configure_oldfacebook] Something has changed  - Force generating registration file to '${OLDFACEBOOK_REGISTRATION_PATH}/${OLDFACEBOOK_REGISTRATION_FILE}'"
+            fb_generate_registration=true
+        fi
+
+        if var_true "${fb_generate_registration}" ; then
+            s6-setuidgid matrix mkdir -p "${OLDFACEBOOK_REGISTRATION_PATH}"
+            s6-setuidgid matrix python3 -m mautrix_facebook \
+                                                        -g \
+                                                        -c "${OLDFACEBOOK_CONFIG_PATH}"/${OLDFACEBOOK_CONFIG_FILE} \
+                                                        -r "${OLDFACEBOOK_REGISTRATION_PATH}"/"${OLDFACEBOOK_REGISTRATION_FILE}" \
+                                                        || exit $?
+            print_notice "[configure_oldfacebook] See https://docs.mau.fi/bridges/general/registering-appservices.html to add to your homeserver"
+        fi
+    fi
+}
+
 configure_signal() {
     if [ "${SETUP_TYPE,,}" = "auto" ] ; then
         set -a
@@ -2987,6 +3269,9 @@ setup_bridges() {
                     ;;
                     "facebook")
                         echo "ENABLE_FACEBOOK=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
+                    ;;
+                    "oldfacebook")
+                        echo "ENABLE_OLDFACEBOOK=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env
                     ;;
                     "feeds" | "rss" | "atom" )
                         echo "ENABLE_HOOKSHOT=TRUE" >> /tmp/.container/matrix_bridges/.bridge-env

@@ -26,6 +26,12 @@ if [ ! -f "/tmp/.container/container-restart" ] ; then
         rm -rf /etc/services.available/bridge-facebook
     fi
 
+    if var_true "${ENABLE_OLDFACEBOOK}" ; then
+        configure_oldfacebook
+    else
+        rm -rf /etc/services.available/bridge-oldfacebook
+    fi
+
     if var_true "${ENABLE_GOOGLECHAT}" ; then
         configure_googlechat
     else

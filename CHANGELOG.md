@@ -1,3 +1,9 @@
+## 0.0.11 2024-04-06 <dave at tiredofit dot ca>
+
+   ### Added
+      - Restore old Facebook Bridge use OLDFACEBOOK_ as environment variable prefixes and oldfacebook as mode value
+
+
 ## 0.0.10 2024-03-16 <dave at tiredofit dot ca>
 
    ### Added

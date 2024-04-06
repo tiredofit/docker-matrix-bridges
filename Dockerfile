@@ -15,15 +15,17 @@ ARG TELEGRAM_VERSION
 ARG WHATSAPP_VERSION
 
 ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.6.5"} \
+    FACEBOOK_VERSION=${FACEBOOK_VERION:-"v0.5.1"} \
     HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"5.2.1"} \
     IMESSAGE_VERSION=${IMESSAGE_VERSION:-"master"} \
     INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"v0.3.1"} \
-    META_VERSION=${META_VERSION:-"v0.2.0"} \
+    META_VERSION=${META_VERSION:-"aa3399bd0774e4c6ad25dbb922b96a28b80ee0e5"} \
     SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.5.1"} \
     SLACK_VERSION=${SLACK_VERSION:-"a9ba2f9249bdc5df69a1349122d1769e7e48c9e1"} \
     TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.15.1"} \
     WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.10.6"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
+    FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
     IMESSAGE_REPO_URL=https://github.com/mautrix/imessage \
     META_REPO_URL=https://github.com/mautrix/meta \
@@ -63,6 +65,33 @@ RUN source assets/functions/00-container && \
     package install .discord-run-deps \
                     olm \
                     ffmpeg \
+                    && \
+    \
+    package install .facebook-build-deps \
+                    libffi-dev  \
+                    py3-pip \
+                    py3-setuptools \
+                    py3-wheel \
+                    py3-pillow \
+                    python3-dev \
+                    && \
+    \
+    package install .facebook-run-deps \
+                    ffmpeg \
+                    py3-aiohttp \
+                    py3-aiohttp-socks \
+                    py3-cffi \
+                    py3-commonmark \
+                    py3-future \
+                    py3-magic \
+                    py3-olm \
+                    py3-paho-mqtt \
+                    py3-pillow \
+                    py3-prometheus-client \
+                    py3-pycryptodome \
+                    py3-pysocks \
+                    py3-ruamel.yaml \
+                    py3-unpaddedbase64 \
                     && \
     \
     package install .hookshot-build-deps \
@@ -187,6 +216,21 @@ RUN source assets/functions/00-container && \
     mkdir -p /assets/config/discord && \
     go build -o /usr/bin/mautrix-discord && \
     cp -R example-config.yaml /assets/config/discord/example.config.yaml && \
+    \
+    cd /usr/src && \
+    clone_git_repo "${FACEBOOK_REPO_URL}" "${FACEBOOK_VERSION}" && \
+    pip3 install \
+                --break-system-packages \
+                --upgrade \
+                --no-cache-dir \
+                -r requirements.txt \
+                -r optional-requirements.txt \
+                .[all] \
+                && \
+    \
+    pip3 install --break-system-packages --no-cache-dir .[e2be] && \
+    mkdir -p /assets/config/facebook && \
+    cp -R mautrix_facebook/example-config.yaml /assets/config/facebook/example.config.yaml && \
     \
     cd /usr/src && \
     clone_git_repo "${HOOKSHOT_REPO_URL}" "${HOOKSHOT_VERSION}" /usr/src/hookshot && \
