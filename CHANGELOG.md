@@ -1,3 +1,10 @@
+## 0.0.13 2024-05-17 <dave at tiredofit dot ca>
+
+   ### Added
+      - Mautrix Signal 0.6.1
+      - Mautrix Meta 0.3.1
+
+
 ## 0.0.12 2024-04-16 <dave at tiredofit dot ca>
 
    ### Added
