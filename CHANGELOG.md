@@ -1,3 +1,9 @@
+## 0.0.14 2024-06-17 <dave at tiredofit dot ca>
+
+   ### Added
+      - Matrix Slack, Hookshot, Meta, Signal Updates
+
+
 ## 0.0.13 2024-05-17 <dave at tiredofit dot ca>
 
    ### Added
