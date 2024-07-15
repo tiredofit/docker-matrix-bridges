@@ -1,3 +1,9 @@
+## 0.0.16 2024-07-15 <dave at tiredofit dot ca>
+
+   ### Added
+      - Mautrix Meta Bridge 23bd5c244736041d06f4df962b285666ba9a12c0
+
+
 ## 0.0.15 2024-07-05 <dave at tiredofit dot ca>
 
    ### Changed
