@@ -1,3 +1,11 @@
+## 0.0.17 2024-09-16 <dave at tiredofit dot ca>
+
+   ### Added
+      - Slack 52cdb0d9727d1de1ecb32f70ca53315469fe569b
+      - Meta 0.4.0
+      - Signal 0.7.1
+
+
 ## 0.0.16 2024-07-15 <dave at tiredofit dot ca>
 
    ### Added
