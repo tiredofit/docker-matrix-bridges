@@ -19,12 +19,11 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.6.5"} \
     HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"5.2.1"} \
     IMESSAGE_VERSION=${IMESSAGE_VERSION:-"master"} \
     INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"147c31aa332e6806a3349889acb7061a46366660"} \
-    META_VERSION=${META_VERSION:-"0.4.0"} \
-    SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.6.2"} \
-    SLACK_VERSION=${SLACK_VERSION:-"52cdb0d9727d1de1ecb32f70ca53315469fe569b"} \
+    META_VERSION=${META_VERSION:-"v0.4.0"} \
     SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.7.1"} \
+    SLACK_VERSION=${SLACK_VERSION:-"v0.1.1"} \
     TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.15.1"} \
-    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.10.8"} \
+    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.10.9"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
     FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
@@ -256,10 +255,12 @@ RUN source assets/functions/00-container && \
     \
     cd /usr/src && \
     clone_git_repo "${META_REPO_URL}" "${META_VERSION}" && \
-    go build -o /usr/bin/mautrix-meta && \
-    mkdir -p /assets/config/facebook /assets/config/instagram && \
-    cp -R example-config.yaml /assets/config/instagram/example.config.yaml && \
-    cp -R example-config.yaml /assets/config/facebook/example.config.yaml && \
+    export MAUTRIX_VERSION=$(cat go.mod | grep 'maunium.net/go/mautrix ' | awk '{ print $2 }') && \
+    export GO_LDFLAGS="-s -w -X main.Tag=$(git describe --exact-match --tags 2>/dev/null) -X main.Commit=$(git rev-parse HEAD) -X 'main.BuildTime=`date '+%b %_d %Y, %H:%M:%S'`' -X 'maunium.net/go/mautrix.GoModVersion=$MAUTRIX_VERSION'" && \
+    go build -o /usr/bin/mautrix-meta -ldflags "$GO_LDFLAGS" ./cmd/mautrix-meta "$@" && \
+    #mkdir -p /assets/config/facebook /assets/config/instagram && \
+    #cp -R example-config.yaml /assets/config/instagram/example.config.yaml && \
+    #cp -R example-config.yaml /assets/config/facebook/example.config.yaml && \
     \
     cd /usr/src && \
     clone_git_repo "${SIGNAL_REPO_URL}" "${SIGNAL_VERSION}" && \
@@ -271,16 +272,19 @@ RUN source assets/functions/00-container && \
         --profile=release \
         && \
     cd /usr/src/signal && \
+    MAUTRIX_VERSION=$(cat go.mod | grep 'maunium.net/go/mautrix ' | awk '{ print $2 }') && \
+    GO_LDFLAGS="-X main.Tag=$(git describe --exact-match --tags 2>/dev/null) -X main.Commit=$(git rev-parse HEAD) -X 'main.BuildTime=`date -Iseconds`' -X 'maunium.net/go/mautrix.GoModVersion=$MAUTRIX_VERSION'" && \
     LIBRARY_PATH=/usr/src/signal/pkg/libsignalgo/libsignal/target/release \
-    go build -o /usr/bin/mautrix-signal && \
+    go build -o /usr/bin/mautrix-signal ./cmd/mautrix-signal && \
     mkdir -p /assets/config/signal && \
-    cp -R example-config.yaml /assets/config/signal/example.config.yaml && \
+    #cp -R example-config.yaml /assets/config/signal/example.config.yaml && \
     \
     cd /usr/src && \
     clone_git_repo "${SLACK_REPO_URL}" "${SLACK_VERSION}" && \
-    go build -o /usr/bin/mautrix-slack && \
+    MAUTRIX_VERSION=$(cat go.mod | grep 'maunium.net/go/mautrix ' | awk '{ print $2 }' | head -n1) && \
+    GO_LDFLAGS="-s -w -X main.Tag=$(git describe --exact-match --tags 2>/dev/null) -X main.Commit=$(git rev-parse HEAD) -X 'main.BuildTime=`date -Iseconds`' -X 'maunium.net/go/mautrix.GoModVersion=$MAUTRIX_VERSION'" && \
+    go build -ldflags="$GO_LDFLAGS" -o /usr/bin/mautrix-slack ./cmd/mautrix-slack "$@" && \
     mkdir -p /assets/config/slack && \
-    cp -R example-config.yaml /assets/config/slack/example.config.yaml && \
     \
     clone_git_repo "${TELEGRAM_REPO_URL}" "${TELEGRAM_VERSION}" && \
     pip3 install \
