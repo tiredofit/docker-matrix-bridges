@@ -1,3 +1,9 @@
+## 0.0.19 2024-09-18 <dave at tiredofit dot ca>
+
+   ### Changed
+      - Fix Display Names with Meta and Signal Bridge
+
+
 ## 0.0.18 2024-09-16 <dave at tiredofit dot ca>
 
    ### Changed
