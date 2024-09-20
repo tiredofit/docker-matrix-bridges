@@ -1,3 +1,9 @@
+## 0.0.20 2024-09-20 <dave at tiredofit dot ca>
+
+   ### Changed
+      - Reset defaults for Whatsapp, Signal, Meta
+
+
 ## 0.0.19 2024-09-18 <dave at tiredofit dot ca>
 
    ### Changed
