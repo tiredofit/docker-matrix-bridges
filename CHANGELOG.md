@@ -1,3 +1,9 @@
+## 0.0.21 2024-09-21 <dave at tiredofit dot ca>
+
+   ### Changed
+      - Fix signal display name issue
+
+
 ## 0.0.20 2024-09-20 <dave at tiredofit dot ca>
 
    ### Changed
