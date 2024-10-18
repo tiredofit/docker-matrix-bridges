@@ -301,9 +301,11 @@ RUN source assets/functions/00-container && \
     \
     cd /usr/src && \
     clone_git_repo "${WHATSAPP_REPO_URL}" "${WHATSAPP_VERSION}" && \
-    go build -o /usr/bin/mautrix-whatsapp && \
-    mkdir -p /assets/config/whatsapp && \
-    cp -R example-config.yaml /assets/config/whatsapp/example.config.yaml && \
+    MAUTRIX_VERSION=$(cat go.mod | grep 'maunium.net/go/mautrix ' | awk '{ print $2 }') && \
+    GO_LDFLAGS="-s -w -X main.Tag=$(git describe --exact-match --tags 2>/dev/null) -X main.Commit=$(git rev-parse HEAD) -X 'main.BuildTime=`date -Iseconds`' -X 'maunium.net/go/mautrix.GoModVersion=$MAUTRIX_VERSION'" && \
+    go build -ldflags="$GO_LDFLAGS" -o /usr/bin/mautrix-whatsapp ./cmd/mautrix-whatsapp && \
+#    mkdir -p /assets/config/whatsapp && \
+#    cp -R example-config.yaml /assets/config/whatsapp/example.config.yaml && \
     \
     chown matrix:matrix /assets/config/ && \
     package remove  .build-deps \

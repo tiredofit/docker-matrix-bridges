@@ -1,3 +1,9 @@
+## 0.0.23 2024-10-18 <dave at tiredofit dot ca>
+
+   ### Changed
+      - Fix 0.0.22
+
+
 ## 0.0.22 2024-10-18 <dave at tiredofit dot ca>
 
    ### Added
