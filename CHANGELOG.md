@@ -1,3 +1,12 @@
+## 0.0.22 2024-10-18 <dave at tiredofit dot ca>
+
+   ### Added
+      - Mautrix Signal 0.7.2
+      - Mautrix Whatsapp 0.11.0
+      - Mautrix Slack 0.1.2
+      - Mautrix Meta 0.4.1
+
+
 ## 0.0.21 2024-09-21 <dave at tiredofit dot ca>
 
    ### Changed
