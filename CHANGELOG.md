@@ -1,3 +1,9 @@
+## 0.0.24 2024-10-26 <dave at tiredofit dot ca>
+
+   ### Added
+      - Mautrix Signal ad41c86f116f484a57b7df07bc082f33fc12d908
+
+
 ## 0.0.23 2024-10-18 <dave at tiredofit dot ca>
 
    ### Changed
