@@ -1,3 +1,9 @@
+## 0.0.26 2025-01-16 <dave at tiredofit dot ca>
+
+   ### Added
+      - Mautrix Signal 0.7.5
+
+
 ## 0.0.25 2024-11-17 <dave at tiredofit dot ca>
 
    ### Added
