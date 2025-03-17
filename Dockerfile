@@ -1,5 +1,5 @@
 ARG DISTRO=alpine
-ARG DISTRO_VARIANT=3.20
+ARG DISTRO_VARIANT=3.21
 
 FROM docker.io/tiredofit/${DISTRO}:${DISTRO_VARIANT}
 LABEL maintainer="Dave Conroy (github.com/tiredofit)"
@@ -19,11 +19,11 @@ ENV DISCORD_VERSION=${DISCORD_VERSION:-"v0.7.1"} \
     HOOKSHOT_VERSION=${HOOKSHOT_VERSION:-"5.2.1"} \
     IMESSAGE_VERSION=${IMESSAGE_VERSION:-"master"} \
     INSTAGRAM_VERSION=${INSTAGRAM_VERSION:-"147c31aa332e6806a3349889acb7061a46366660"} \
-    META_VERSION=${META_VERSION:-"v0.4.4"} \
-    SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.8.0"} \
+    META_VERSION=${META_VERSION:-"v0.4.5"} \
+    SIGNAL_VERSION=${SIGNAL_VERSION:-"v0.8.1"} \
     SLACK_VERSION=${SLACK_VERSION:-"v0.1.3"} \
     TELEGRAM_VERSION=${TELEGRAM_VERSION:-"v0.15.1"} \
-    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.11.3"} \
+    WHATSAPP_VERSION=${WHATSAPP_VERSION:-"v0.11.4"} \
     DISCORD_REPO_URL=https://github.com/mautrix/discord \
     FACEBOOK_REPO_URL=https://github.com/mautrix/facebook \
     HOOKSHOT_REPO_URL=https://github.com/matrix-org/matrix-hookshot \
