@@ -1,3 +1,9 @@
+## 0.0.29 2025-05-27 <dave at tiredofit dot ca>
+
+   ### Added
+      - Update Mautrix Bridges
+
+
 ## 0.0.28 2025-03-17 <dave at tiredofit dot ca>
 
    ### Added
